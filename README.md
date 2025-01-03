@@ -1,6 +1,6 @@
 # **nh3**
 
-Utah Division of Air Quality examined mobile source emission on-road of NH3 and the more typical emission gases ($NO_x, CO, CO_2, HO$).
+Utah Division of Air Quality examined mobile source emission on-road of NH3 and the more typical emission gases ($NO_x,\ CO,\ CO_2,\ HO$).
 
 ## Objectives
 
