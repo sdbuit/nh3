@@ -1,23 +1,21 @@
-# nh3
+# **nh3**
 
-Samuel Buit
-
-Testing, data, collection, and analysis
+Utah Division of Air Quality examined mobile source emission on-road of NH3 and the more typical emission gases ($NO_x, CO, CO_2, HO$).
 
 ## Objectives
 
-Model of Utah’s diesel and gasoline vehicle passenger vehicle categories -- identify test vehicle populations representative of northern Utah’s diesel and gasoline passenger flee
+* Model of Utah's diesel and gasoline vehicle passenger vehicle categories.  Test vehicle vehicle fleet of gasoline and diesel vehicles representaive of northern Utah's population.
 
-Laboratory (dynamometer) comparison of base station NH3 analyzer and Portable Emissions Monitoring System (PEMS).
+* Develop NH3 calibration procedures, protocols, and validation tests for precision and accuracy.
 
-Develop NH3 calibration procedures, protocols, and validation tests for precision and accuracy.
+* Laboratory (dynamometer) measurement of diesel and gasoline vehicle $NH_3$ emissions.
 
-Laboratory (dynamometer) measurement of diesel and gasoline vehicle NH3 emissions.
-
-Quantification of Real Driving Emissions of NH3 from diesel and gasoline vehicles.
+* Quantification of real driving emissions of NH3 from diesel and gasoline vehicles with respect to power levels (vehicle specific power).
 
 ## Equipment
 
-PIccaro G2013 NH3 Analyzer
+[Picarro G2103 cavity ring-down spectrometer (CRDS)](docs\datasheet\Picarro_G2103_Analyzer_Datasheet_200806.pdf)
 
-ECM miniPEMS (Portable Emissions Monitoring System)
+[ECM miniPEMS (Portable Emissions Monitoring System)](docs\datasheet\ECM-miniPEMS_Datasheet.pdf)
+
+#### Samuel Buit
