@@ -14,8 +14,8 @@ Utah Division of Air Quality examined mobile source emission on-road of NH3 and 
 
 ## Equipment
 
-[Picarro G2103 cavity ring-down spectrometer (CRDS)](docs\datasheet\Picarro_G2103_Analyzer_Datasheet_200806.pdf)
+[Picarro G2103 cavity ring-down spectrometer (CRDS)](docs/datasheet/Picarro_G2103_Analyzer_Datasheet_200806.pdf)
 
-[ECM miniPEMS (Portable Emissions Monitoring System)](docs\datasheet\ECM-miniPEMS_Datasheet.pdf)
+[ECM miniPEMS (Portable Emissions Monitoring System)](docs/datasheet/ECM-miniPEMS_Datasheet.pdf)
 
 #### Samuel Buit
