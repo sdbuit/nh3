@@ -20,11 +20,7 @@ where:
 
 An **approximate** model for VSP often appears as:
 
-$$\text{VSP} \approx
-va \cdot (1 + \epsilon_i)
-+ g \cdot \text{grade} \cdot v
-+ g \cdot C_{R} \cdot v
-+ \tfrac{1}{2} \cdot \rho_{a} \cdotp C_{D} \cdot \left ( \frac{A}{m} \right ) \cdot (v + v_{w})^2 \cdot v + C_{\mathrm{if}} \cdot v,$$
+$$\text{VSP} \approx va \cdot (1 + \epsilon_i) + g \cdot \text{grade} \cdot v + g \cdot C_{R} \cdot v + \tfrac{1}{2} \cdot \rho_{a} \cdotp C_{D} \cdot \left ( \frac{A}{m} \right ) \cdot (v + v_{w})^2 \cdot v + C_{\mathrm{if}} \cdot v,$$
 
 where:
 - $( a )$ is acceleration,  
@@ -49,7 +45,7 @@ $$F_{\mathrm{traction}}=ma+F_{\mathrm{rolling}}+F_{\mathrm{aero}}+F_{\mathrm{gra
 
 leading to:
 
-$$\text{VSP} = \frac{\bigl(ma + F_{\mathrm{rolling}}+F_{\mathrm{aero}} + F_{\mathrm{grade}}\bigr)\,v}{m}$$
+$$\text{VSP} = \frac{\bigl(ma + F_{\mathrm{rolling}}+F_{\mathrm{aero}} + F_{\mathrm{grade}}\bigr) \cdot v}{m}$$
 
 <br>
 
@@ -59,12 +55,12 @@ $$\text{VSP} = \frac{\bigl(ma + F_{\mathrm{rolling}}+F_{\mathrm{aero}} + F_{\mat
 
 **2. Rolling Resistance**  
    
-   $$F_{\mathrm{rolling}}=C_{r}\,m\,g\,\cos(\theta),$$
+   $$F_{\mathrm{rolling}}=C_{r} \ mg \ \cos(\theta),$$
    
    where $(C_{r})$ is the rolling resistance coefficient, and $(\theta)$ is the road grade angle (radians).
 
 **3. Aerodynamic Drag**  
-   $$F_{\mathrm{aero}}= \tfrac{1}{2}\,\rho\,C_{d}\,A\,v^2,$$
+   $$F_{\mathrm{aero}}= \left( \tfrac{1}{2} \right) \cdot \rho \ C_{d} \ A \ v^2$$
    
    where $(\rho)$ is air density, $(C_{d})$ is coefficient 
    and $(A)$ is frontal area.
