@@ -1,16 +1,26 @@
 # **nh3**
 
-Utah Division of Air Quality examined mobile source emission on-road of NH3 and the more typical emission gases ($NO_x,\ CO,\ CO_2,\ HO$).
+Utah Division of Air Quality (UDAQ) examined mobile source emission on-road of NH3 and the more typical emission gases (NOx, CO, CO2, and HO).
+
+<div align="center" style="text-align: center;">
+<h4>
+  <a href="https://github.com/sdbuit/nh3/blob/origin/docs/vehicle-dynamics.md" rel="./docs/">Vehicle-Specific Power</a>
+  <span> · </span>
+  <a href="https://github.com/sdbuit/nh3/blob/origin/docs/nh3_output.md">Methods</a>
+  <span> · </span>
+  <a href="https://github.com/sdbuit/nh3/blob/origin/notebooks/">Notebooks</a>
+</h4>
+</div>
 
 ## Objectives
 
-* Model of Utah's diesel and gasoline vehicle passenger vehicle categories.  Test vehicle vehicle fleet of gasoline and diesel vehicles representaive of northern Utah's population.
+* Model of Utah's diesel and gasoline passenger vehicle categories. A test fleet of gasoline and diesel vehicles representative of northern Utah's population.
 
 * Develop NH3 calibration procedures, protocols, and validation tests for precision and accuracy.
 
-* Laboratory (dynamometer) measurement of diesel and gasoline vehicle $NH_3$ emissions.
+* Off-road laboratory (dynamometer) measurements of diesel and gasoline vehicle NH3 emissions.
 
-* Quantification of real driving emissions of NH3 from diesel and gasoline vehicles with respect to power levels (vehicle specific power).
+* Quantifying real driving emissions of NH3 from diesel and gasoline vehicles with respect to power levels (vehicle-specific power).
 
 ## Equipment
 
