@@ -1,14 +1,25 @@
 import os
 import sys
+import csv
 import json
 import shutil
+import logging
+import asyncio
+import openpyxl
 import dataclasses
 from pathlib import Path
 from dataclasses import dataclass
-from typing import Type, TypeVar, Optional, Any
+from collections import defaultdict
+from typing import (
+    Type, Dict, List, TypeVar, Optional, Tuple
+)
 
 import polars as pl
 from docx import Document
+
+
+BASEDIR = Path(__file__).resolve().parent
+GEODETIC_DATA_DIR = BASEDIR / 'data' / 'geo'
 
 
 def snake_to_camel(s: str) -> str:
@@ -130,6 +141,7 @@ def extract_docx_to_json(docx_path, json_path):
         print(f'Failed to extract data from {docx_path}: {e}')
 
 def reorganize_vehicle_data(base_dir: str, output_dir: str):
+    """A couple bugs in this subroutine, resulting in a few manual touch ups."""
     base_path = Path(base_dir)
     output_path = Path(output_dir)
     if not base_path.exists():
@@ -160,11 +172,143 @@ def reorganize_vehicle_data(base_dir: str, output_dir: str):
 
         print(f'Reorganized {vehicle_dir.name} -> {target_dir}')
 
+async def xlsx_to_csv(excel_path: Path, csv_path: Path) -> None:
+    """Convert a single-sheet Excel file to CSV using openpyxl.
+    
+    Args
+        excel_path: The path to the source Excel file.
+        csv_path:   path where the new .csv file will be created.
+    
+    """
+    try:
+        workbook = openpyxl.load_workbook(excel_path, read_only=True)
+        worksheet = workbook.active
+        with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            for row in worksheet.iter_rows(values_only=True):
+                writer.writerow(row)
+        logging.info('Converted %s -> %s', excel_path.name, csv_path.name)
+    except Exception as exc:
+        logging.error('Error converting %s to CSV. Error: %s', excel_path.name, exc)
+        raise
+    
+async def multi_nsheet_xlsx_to_csv(excel_path: Path, base_name: str, 
+                                           start_index: int = 1) -> int:
+    """Convert a multi-sheet Excel file into multiple CSV files, each sheet 
+    becoming its own csv.
+
+    Returns
+        index: 
+        
+    """
+    try:
+        workbook = openpyxl.load_workbook(excel_path, read_only=True)
+        sheet_names = workbook.sheetnames
+        current_index = start_index
+        for sheet_name in sheet_names:
+            new_filename = f'{current_index:02d}_{base_name}.csv'
+            csv_path = excel_path.with_name(new_filename)
+            if csv_path.exists():
+                logging.warning('File %s already exists; overwriting.', 
+                                csv_path.name)
+            worksheet = workbook[sheet_name]
+            with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                for row in worksheet.iter_rows(values_only=True):
+                    writer.writerow(row)
+            logging.info('Converted sheet "%s" in %s -> %s', sheet_name, 
+                         excel_path.name, new_filename)
+            current_index += 1
+        return current_index
+    except Exception as exc:
+        logging.error(
+            'Error converting multi-sheet Excel %s to CSV. Error: %s',
+            excel_path.name, exc
+        )
+        raise
+
+async def ecm_file_proc(vehicle_data_dir: Path) -> None:
+    """Recursively walk vehicle_data_dir and locate instances of '*ECM*.xlsx'.
+    Convert each to csv, rename (ascending order). 
+    
+    Args
+        vehicle_data_dir: The top-level dir containing ECM data files.
+    
+    """
+    ecm_files_by_dir: Dict[Path, List[Path]] = defaultdict(list)
+    for xlsx_file in vehicle_data_dir.rglob('*ECM*.xlsx'):
+        if xlsx_file.is_file():
+            ecm_files_by_dir[xlsx_file.parent].append(xlsx_file)        
+    # Process each directory separately
+    for directory_path, file_paths in ecm_files_by_dir.items():
+        logging.info('Processing ECM files in directory: %s', directory_path)
+        # Extract numeric portion and sort
+        ecm_files_with_num: List[Tuple[int, Path]] = []
+        for path in file_paths:
+            parts = path.stem.split('_', maxsplit=1)
+            if len(parts) != 2:
+                logging.warning('Skipping "%s"; does not match ECM_#.xlsx pattern.', path.name)
+                continue
+            try:
+                num = int(parts[1])
+                ecm_files_with_num.append((num, path))
+            except ValueError:
+                logging.warning('Skipping "%s"; numeric portion not parseable.', path.name)
+                continue
+    ecm_files_with_num.sort(key=lambda x: x[0])
+    for idx, (_, excel_path) in enumerate(ecm_files_with_num, start=1):
+        new_filename = f'{idx:02d}_ECM.csv'
+        new_csv_path = excel_path.with_name(new_filename)
+        if new_csv_path.exists():
+            logging.warning('File "%s" already exists; overwriting.', new_csv_path.name)
+        await xlsx_to_csv(excel_path, new_csv_path)
+        # Optional: archive or remove the original
+        # excel_path.unlink(missing_ok=True)
+
+async def auto5gas_file_proc(vehicle_data_dir: Path) -> None:
+    """Recursively walk vehicle_data_dir and process any .xlsx of name
+    containing any variant of '5Gas' or '5-Gas'.
+    
+    """
+    auto5gas_file_container: Dict[Path, List[Path]] = defaultdict(list)
+    for xlsx_file in vehicle_data_dir.rglob('*.xlsx'):
+        if not xlsx_file.is_file():
+            continue
+        name_lower = xlsx_file.name.lower()
+        if '5gas' in name_lower or '5-gas' in name_lower:
+            auto5gas_file_container[xlsx_file.parent].append(xlsx_file)
+            
+    for directory_path, file_paths in auto5gas_file_container.items():
+        logging.info('Processing 5Gas files in directory: %s', directory_path)
+        file_paths.sort()
+        # Convert each 5Gas workbook. Each workbook restarts at 01.
+        for excel_path in file_paths:
+            logging.info('Converting multi-sheet 5Gas workbook: %s', 
+                         excel_path.name)
+            # Start numbering at 1 for this workbook
+            await multi_nsheet_xlsx_to_csv(excel_path, 'Auto5Gas', 
+                                                   start_index=1)
+            # excel_path.unlink(missing_ok=True)
+
+async def main() -> None:
+    """Main async function:
+    
+    Recursively process all ECM_*.xlsx and 5Gas*.xlsx files in a given 
+    directory structure.
+    
+    """
+    vehicle_data_dir = BASEDIR / 'data' / 'vehicle'
+    # Run both tasks, but in sequence; 
+    # for concurrency, use gather() asyncio.gather(process_ecm_files(...), ...)
+    await ecm_file_proc(vehicle_data_dir)
+    await auto5gas_file_proc(vehicle_data_dir)
+
 
 if __name__ == '__main__':
-    BASEDIR = Path(__file__).resolve().parent
+    logging.basicConfig(level=logging.INFO)
+    asyncio.run(main())
+    sys.exit()
 
-    GEODETIC_DATA_DIR = BASEDIR / 'data' / 'geo'
     geodetic_csv_path = os.path.join(GEODETIC_DATA_DIR,
                                  'usu_drive_cycle_path_elev_profile.csv')
     geodetic_data = load_geodetic_csv_to_list(geodetic_csv_path)
@@ -177,4 +321,3 @@ if __name__ == '__main__':
     BASE_VEHICLE_DIR = BASEDIR / 'data' / 'archive' / 'UWRL_ON_ROAD_Measurments' / 'UWRL_On_Road_Measurements_Diesel'
     OUTPUT_DIR = BASEDIR / 'data' / 'vehicle'
     reorganize_vehicle_data(BASE_VEHICLE_DIR, OUTPUT_DIR)
-    sys.exit()
