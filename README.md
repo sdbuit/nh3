@@ -4,7 +4,6 @@
 
 nh3 is a lightweight framework for characterizing ammonia (NH3) emissions under real-time driving conditions.
 
-
 <h4>
   <a href="https://github.com/sdbuit/nh3/blob/origin/docs/vehicle-dynamics.md" rel="./docs/">Vehicle Dynamics</a>
   <span> · </span>
@@ -29,7 +28,7 @@ The study aimed to clarify ammonia (NH3) emissions and their impact on particula
 
 * Model of Utah's diesel and gasoline passenger vehicle categories. A test fleet of gasoline and diesel vehicles representative of northern Utah's population.
 
-* Develop NH3 calibration procedure; for verification, validation, and evaluating [Picarro G2103 cavity ring-down spectrometer (CRDS)](docs/datasheet/Picarro_G2103_Analyzer_Datasheet_200806.pdf) and [ECM miniPEMS (Portable Emissions Monitoring System)](docs/datasheet/ECM-miniPEMS_Datasheet.pdf).
+* Develop NH3 calibration procedure; for verification, validation, and evaluating [Picarro G2103 cavity ring-down spectrometer (CRDS)](docs/datasheet/Picarro_G2103_Analyzer_Datasheet_ Shane Smiskol ).
 
 * Off-road laboratory (dynamometer) measurements of diesel and gasoline vehicle NH3 emissions.
 
