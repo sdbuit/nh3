@@ -28,7 +28,7 @@ The study aimed to clarify ammonia (NH3) emissions and their impact on particula
 
 * Model of Utah's diesel and gasoline passenger vehicle categories. A test fleet of gasoline and diesel vehicles representative of northern Utah's population.
 
-* Develop NH3 calibration procedure; for verification, validation, and evaluating [Picarro G2103 cavity ring-down spectrometer (CRDS)](docs/datasheet/Picarro_G2103_Analyzer_Datasheet_ Shane Smiskol ).
+* Develop NH3 calibration procedure; for verification, validation, and evaluating **[Picarro G2103](./docs/datasheet/Picarro_G2103_Analyzer_Datasheet_200806.pdf)** cavity ring-down spectrometer (CRDS).
 
 * Off-road laboratory (dynamometer) measurements of diesel and gasoline vehicle NH3 emissions.
 
