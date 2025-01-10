@@ -105,22 +105,6 @@ class CoordinateMapper:
     #     closest_coords = thread_map(self.find_closest_point, points, chunksize=100)
     #     return [coord.altitude if coord else np.nan for coord in closest_coords]
     
-    def map_elevations_v2(self, vehicle_data: List[Coordinate], 
-                          use_process_map: bool = False) -> List[np.float32]:
-        """
-        Maps vehicle coordinates to the closest elevation.
-        
-        Args:
-            vehicle_data: List of vehicle coordinates.
-            use_process_map: If True, use `process_map`. Otherwise, use `thread_map`.
-        """
-        points = [v.point for v in vehicle_data]
-        if use_process_map:
-            closest_coords = process_map(self.find_closest_point, points, chunksize=100)
-        else:
-            closest_coords = thread_map(self.find_closest_point, points, chunksize=100)
-
-        return [coord.altitude if coord else np.nan for coord in closest_coords]
 
     def map_elevations(self, vehicle_data: List[Coordinate]) -> List[np.float32]:
         """Maps vehicle coordinates to the closest elevation."""
@@ -134,6 +118,25 @@ class CoordinateMapper:
                 logging.warning(f'Could not map elevation for vehicle coordinate {vehicle_coord}')
         
         return mapped_elevations
+    
+    def map_elevations_v2(self, vehicle_data: List[Coordinate], 
+                          use_process_map: bool = False) -> List[np.float32]:
+        """
+        Maps vehicle coordinates to the closest elevation.
+        
+        Args:
+            vehicle_data: List of vehicle coordinates.
+            use_process_map: If True, use `process_map`. Otherwise, use `thread_map`.
+        """
+        points = [v.point for v in vehicle_data]
+        if use_process_map:
+            logging.info("Using process_map for mapping...")
+            closest_coords = process_map(self.find_closest_point, points, chunksize=100)
+        else:
+            logging.info("Using thread_map for mapping...")
+            closest_coords = thread_map(self.find_closest_point, points, chunksize=100)
+
+        return [coord.altitude if coord else np.nan for coord in closest_coords]
     
 
 def update_vehicle_data_with_elevation(vehicle_data: List[Coordinate], 
