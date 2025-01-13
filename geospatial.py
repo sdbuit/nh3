@@ -8,6 +8,9 @@ from tqdm.contrib.concurrent import thread_map, process_map
 import numpy as np
 import polars as pl
 
+from scipy.spatial import cKDTree
+
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -151,7 +154,7 @@ class CoordinateMapper:
         args:
             vehicle_data: A list of vehicle coordinates to map.
 
-        returns: 
+        returns:
             A list of altitudes (floats), each matching the closest point in altitude_data.
         """
         mapped_elevations = []
@@ -249,3 +252,41 @@ def merge_altitudes(
             )
         )
     return updated
+
+def calculate_elevation_gain_pipeline(
+    df: pl.DataFrame,
+    window_size: int = 5,
+    threshold: float = 1.0
+) -> float:
+    """
+    source: https://www.gpsvisualizer.com/tutorials/elevation_gain.html
+    
+    A pipeline function that:
+    Smooths data with a rolling mean, extracts altitude data, and computes
+    total elevation gain above a threshold.
+
+    Args:
+        df: Polars DataFrame with 'alt_m' column (time-ordered or 
+            distance-ordered).
+        window_size: The window size for the moving average filter.
+        threshold: Minimum altitude change to be counted as "gain".
+
+    Returns:
+        Total cumulative elevation gain (float).
+        
+    NOTE:  If the difference between consecutive points is smaller, its 
+        assumed to be noise.  This parameterize view threshold.
+        For example, threshold = 1.0 (meter or ft.) 
+    """
+    df_smoothed = df.with_columns(
+        pl.col('alt_m').rolling_mean(window_size).alias('alt_m_smooth'))
+
+    alt_list = df_smoothed['alt_m_smooth'].to_list()
+
+    total_gain = 0.0
+    for i in range(1, len(alt_list)):
+        delta = alt_list[i] - alt_list[i-1]
+        if delta > threshold:
+            total_gain += delta
+
+    return total_gain
