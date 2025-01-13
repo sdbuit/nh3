@@ -1,11 +1,13 @@
 import os
 import polars as pl
 from dataclasses import dataclass
-from geospatial import Coordinate, Point
 from typing import List
-from geospatial import Coordinate, Point # , update_vehicle_data_with_elevation
+
+from geospatial import Coordinate, Point
 import polars.selectors as cs
 
+
+# Specify the subset of columns to read from the CSV (ECM data)
 ecm_col_indices = [                     # Indices of columns in the CSV
         0, 1, 2,                        # Timestamps
         4, 5, 6, 7,                     # NOxCANt, O2R, AFR, PKPA
@@ -91,6 +93,36 @@ ecm_col_dtypes = {
     'can_bus_50': pl.Float64,
 }
 
+def load_dataset(dataset_path: str = '01_ECM.csv',
+                 has_headers: bool = True,
+                 skip_rows: int = 6,
+                 columns=ecm_col_indices,
+                 new_columns=ecm_col_names) -> pl.DataFrame:
+    """
+    Loads the ECM dataset from a CSV file using Polars.
+    
+    Args:
+        dataset_path: Path to the CSV file.
+        has_headers: Whether the CSV file has a header row.
+        skip_rows: Number of leading rows to skip.
+        columns: Indices of columns to load.
+        new_columns: List of names for the loaded columns.
+
+    Returns:
+        A Polars DataFrame containing the selected ECM data.
+    """
+    df = pl.read_csv(
+        dataset_path,
+        has_header=has_headers,
+        skip_rows=skip_rows,
+        columns=columns,
+        new_columns=new_columns,
+    )
+    # Drop columns with all nulls
+    df = df.drop([c for c in df.columns if df[c].null_count() == df.height])
+    return df
+
+
 def vheicle_geodetic2coord(df: pl.DataFrame):
     vehicle_coord_list = []
     for row in df.to_dicts():
@@ -105,52 +137,83 @@ def vheicle_geodetic2coord(df: pl.DataFrame):
         )
     return vehicle_coord_list 
 
-
 def get_geodetic_data(df: pl.DataFrame, lat_col: str, lon_col: str, 
-                        alt_col: str) -> List[Coordinate]:
-    """Extracts coordinates from a Polars DataFrame."""
-    return [Coordinate(point=Point(lat=row[lat_col], lon=row[lon_col]),
-                       altitude=row[alt_col])
-            for row in df.iter_rows(named=True)]
+                      alt_col: str) -> List[Coordinate]:
+    """
+    Extracts coordinates from a Polars DataFrame as a list of Coordinate objects.
+
+    Args:
+        df: A Polars DataFrame containing lat/lon/alt columns.
+        lat_col: The name of the latitude column in degrees.
+        lon_col: The name of the longitude column in degrees.
+        alt_col: The name of the altitude column in meters.
+
+    Returns:
+        A list of Coordinate objects.
+    """
+    return [
+        Coordinate(
+            point=Point(lat=row[lat_col], lon=row[lon_col]),
+            altitude=row[alt_col]
+        )
+        for row in df.iter_rows(named=True)
+    ]
+
+def vehicle_geodetic_to_coord(df: pl.DataFrame) -> List[Coordinate]:
+    """
+    Converts a Polars DataFrame with 'lat_deg', 'lon_deg', 'alt_m' 
+    into a list of Coordinate objects.
     
-def update_dataset(df: pl.DataFrame, updated_coords: List[Coordinate], 
-                   lat: str, lon: str, alt: str) -> pl.DataFrame:
-    """Updates dataset with new altitude values."""
+    Args:
+        df: A Polars DataFrame containing columns 'lat_deg', 'lon_deg', and 'alt_m'.
+    
+    Returns:
+        A list of Coordinates with lat/lon in degrees and altitude in meters.
+    """
+    coord_list = []
+    for row in df.to_dicts():
+        coord_list.append(
+            Coordinate(
+                point=Point(
+                    lat=row["lat_deg"],
+                    lon=row["lon_deg"]
+                ),
+                altitude=row["alt_m"]
+            )
+        )
+    return coord_list
+
+def update_dataset(df: pl.DataFrame,
+                   updated_coords: List[Coordinate],
+                   lat: str,
+                   lon: str,
+                   alt: str) -> pl.DataFrame:
+    """
+    Updates a DataFrame's lat/lon/alt columns with new values.
+
+    Args:
+        df: Original Polars DataFrame.
+        updated_coords: List of Coordinates (with updated altitudes).
+        lat: Name of the latitude column to replace.
+        lon: Name of the longitude column to replace.
+        alt: Name of the altitude column to replace.
+
+    Returns:
+        A new DataFrame with updated lat/lon/alt columns.
+    """
     new_data = {
         lat: [float(c.point.lat) for c in updated_coords],
         lon: [float(c.point.lon) for c in updated_coords],
         alt: [float(c.altitude) for c in updated_coords],
     }
     updated_df = pl.DataFrame(new_data)
+
+    # Drop the old columns and then hstack the new ones
     return df.drop([lat, lon, alt]).hstack(updated_df)
-
-def load_dataset(dataset_path:str='01_ESM.csv', has_headers:bool=True, 
-                 skip_rows:int=6, columns=ecm_col_indices, 
-                 new_colums=ecm_col_names) -> pl.DataFrame:
-    dataset_path = '01_ECM.csv'
-    df = pl.read_csv(dataset_path, has_header=True, skip_rows=6,
-                     columns=ecm_col_indices, new_columns=ecm_col_names)
-    df.drop([c for c in df.columns if df[c].null_count() == df.height])
-    
-    return df
-
 
 
 if __name__ == '__main__':
     df = load_dataset()
-    print(df)
+    print(df.head())
     print(df.columns)
-    # df.select(pl.col('struct_col').struct.field(''))
-    
-    # dataset_path = '01_ECM.csv'
-    # df = pl.read_csv(dataset_path,
-    #                  has_header=True, 
-    #                  skip_rows=6,
-    #                  columns=ecm_col_indices,
-    #                  new_columns=ecm_col_names
-    #                 )
-    # df.drop([c for c in df.columns if df[c].null_count() == df.height])
-    # schema = df.collect_schema
-    # print(df.collect_schema())
-    # print(df.collect_schema)
     

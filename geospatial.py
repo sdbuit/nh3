@@ -3,15 +3,16 @@ import math
 import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-# from pathlib import Path
-from typing import List, Union
+from typing import List
 from tqdm.contrib.concurrent import thread_map, process_map
 import numpy as np
 import polars as pl
 
 
-logging.basicConfig(level=logging.INFO, 
-                    format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
 @dataclass
 class Point:
@@ -73,13 +74,22 @@ class DistanceCalculator(ABC):
         pass
 
 class HaversineDistance(DistanceCalculator):
-    """Calculates great-circle distances using the Haversine formula."""
+    """
+    Calculates great-circle distances using the Haversine formula.
+    Assumes lat/lon in degrees, Earth radius ~6367.0 km by default.
+    """
     def __init__(self, radius: np.float32 = 6367.0):
         self.radius = radius
 
     def point_radian(self, point: Point) -> Point:
-        """Converts a dataclss Point of lat and lon to radians."""
-        return Point(np.radians(point.lat), np.radians(point.lon))
+        """Converts lat/lon from degrees to radians if deg=True."""
+        if point.deg:
+            return Point(
+                lat=np.radians(point.lat),
+                lon=np.radians(point.lon),
+                deg=False
+            )
+        return point
 
     def calculate(self, p1: Point, p2: Point) -> np.float32:
         p1 = self.point_radian(p1)  # Convert (Lat, Lon) to Radians
@@ -90,26 +100,39 @@ class HaversineDistance(DistanceCalculator):
             math.cos(p1.lat)*math.cos(p2.lat)*math.sin(dlon/2)**2
         c = 2*math.atan2(math.sqrt(a), math.sqrt(1-a))
         
-        return self.radius*c
+        return np.float32(self.radius*c)
 
 
 class Euclidean(DistanceCalculator):
-    """Calculates distance using simple Euclidean formula."""
+    """Calculates planar Euclidean distance."""
     def calculate(self, p1: Point, p2: Point) -> np.float32:
         return np.sqrt((p2.lat-p1.lat)**2 + (p2.lon-p1.lon)**2)
     
 
 class CoordinateMapper:
     """
-    Maps vehicle coordinates to the closest altitude points from a dataset
-    using a specified distance calculation algorithm.
+    Maps vehicle coordinates to the closest altitude point using a specified
+    distance calculation (e.g., Haversine or Euclidean).
     """
     def __init__(self, altitude_data: List[Coordinate], distance_calculator: DistanceCalculator):
+        """
+        args:
+            altitude_data: A list of known Coordinates with altitudes.
+            distance_calculator: An instance of DistanceCalculator to measure distances.
+        """        
         self.altitude_data = altitude_data
         self.distance_calculator = distance_calculator
 
     def find_closest_point(self, target: Point) -> Coordinate:
-        """Custom implementation to find the closest point without lambda."""
+        """
+        Finds the single closest altitude Coordinate to the given target point.
+        
+        args:
+            target: The point for which we want the nearest altitude.
+        
+        returns:
+            The Coordinate (point + altitude) that is closest to `target`.
+        """
         closest_coord = None
         min_distance = np.float32(np.inf)
 
@@ -121,15 +144,16 @@ class CoordinateMapper:
 
         return closest_coord
     
-    # def map_elevations(self, vehicle_data: List[Coordinate]) -> List[np.float32]:
-    #     """Maps vehicle coordinates to the closest elevation with a progress bar."""
-    #     points = [v.point for v in vehicle_data]
-    #     closest_coords = thread_map(self.find_closest_point, points, chunksize=100)
-    #     return [coord.altitude if coord else np.nan for coord in closest_coords]
-    
-
     def map_elevations(self, vehicle_data: List[Coordinate]) -> List[np.float32]:
-        """Maps vehicle coordinates to the closest elevation."""
+        """
+        Maps a list of vehicle Coordinates to their closest altitudes.
+
+        args:
+            vehicle_data: A list of vehicle coordinates to map.
+
+        returns: 
+            A list of altitudes (floats), each matching the closest point in altitude_data.
+        """
         mapped_elevations = []
         for vehicle_coord in vehicle_data:
             closest_coord = self.find_closest_point(vehicle_coord.point)
@@ -144,32 +168,84 @@ class CoordinateMapper:
     def map_elevations_v2(self, vehicle_data: List[Coordinate], 
                           use_process_map: bool = False) -> List[np.float32]:
         """
-        Maps vehicle coordinates to the closest elevation.
-        
-        Args:
+        Maps a list of vehicle Coordinates to their closest altitudes, 
+        optionally using multi-processing (process_map) for speed.
+    
+        args:
             vehicle_data: List of vehicle coordinates.
-            use_process_map: If True, use `process_map`. Otherwise, use `thread_map`.
+            use_process_map: If True, use process_map; else use thread_map.
+        
+        returns: A list of altitudes (floats).
         """
         points = [v.point for v in vehicle_data]
         if use_process_map:
             logging.info('Using process_map for mapping...')
-                                        # Vehicle Point(lat,lon), altitude)
             closest_coords = process_map(self.find_closest_point, points,
                                          chunksize=100)
         else:
             logging.info('Using thread_map for mapping...')
             closest_coords = thread_map(self.find_closest_point, points,
                                         chunksize=100)
-        
-        logging.info(f'Total missing closest points: {sum(1 for coord in closest_coords if coord is None)}')
-        
-        return [coord.altitude if coord else np.nan for coord in closest_coords]
+
+        missing_count = sum(1 for coord in closest_coords if coord is None)
+        logging.info(f'Total missing closest points: {missing_count}')
+          
+        return [
+            coord.altitude if coord else np.nan 
+            for coord in closest_coords
+        ]
     
 
-def update_vehicle_data_with_elevation(vehicle_data: List[Coordinate], 
+def update_vehicle_data_with_elevation(vehicle_data: List[Coordinate],
                                        mapped_elevations: List[np.float32]) -> List[Coordinate]:
-    """Updates vehicle data by replacing the altitude with mapped elevations."""
+    """
+    Updates a list of Coordinates by replacing each altitude with the mapped 
+    altitude.
+    
+    Args:
+        vehicle_data: Original list of Coordinates.
+        mapped_elevations: A list of floats (altitudes) of the same length.
+
+    Returns:
+        A new list of Coordinates with updated altitudes.
+    """
     if len(vehicle_data) != len(mapped_elevations):
         logging.error('Mismatch between vehicle data and mapped elevations')
         raise ValueError('Mismatch between vehicle data and mapped elevations.')
 
+    updated_data = []
+    for coord, alt in zip(vehicle_data, mapped_elevations):
+        updated_data.append(
+            Coordinate(
+                point=coord.point,
+                altitude=alt
+            )
+        )
+    return updated_data
+
+def merge_altitudes(
+    original_coords: List[Coordinate],
+    altitudes: List[float]
+) -> List[Coordinate]:
+    """
+    Merges new altitude values with existing Coordinates, preserving lat/lon.
+    
+    Args:
+        original_coords: The original list of Coordinates.
+        altitudes: A list of new altitude values (in the same order).
+    
+    Returns:
+        A new list of Coordinates with updated altitudes.
+    """
+    updated = []
+    for old_coord, new_alt in zip(original_coords, altitudes):
+        updated.append(
+            Coordinate(
+                point=Point(
+                    lat=old_coord.point.lat,
+                    lon=old_coord.point.lon
+                ),
+                altitude=new_alt
+            )
+        )
+    return updated
