@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from geospatial import Coordinate, Point
 from typing import List
 from geospatial import Coordinate, Point # , update_vehicle_data_with_elevation
+import polars.selectors as cs
 
 ecm_col_indices = [                     # Indices of columns in the CSV
         0, 1, 2,                        # Timestamps
@@ -90,48 +91,55 @@ ecm_col_dtypes = {
     'can_bus_50': pl.Float64,
 }
 
-def extract_coordinates(df: pl.DataFrame, lat_col: str, lon_col: str, 
+def vheicle_geodetic2coord(df: pl.DataFrame):
+    vehicle_coord_list = []
+    for row in df.to_dicts():
+        vehicle_coord_list.append(
+            Coordinate(
+                point=Point(
+                    lat=row["lat_deg"],
+                    lon=row["lon_deg"]
+                ),
+                altitude=row["alt_m"]  # or 0 if missing
+            )
+        )
+    return vehicle_coord_list 
+
+
+def get_geodetic_data(df: pl.DataFrame, lat_col: str, lon_col: str, 
                         alt_col: str) -> List[Coordinate]:
     """Extracts coordinates from a Polars DataFrame."""
-    return [
-        Coordinate(
-            point=Point(lat=row[lat_col], lon=row[lon_col]),
-            altitude=row[alt_col]
-        )
-        for row in df.iter_rows(named=True)
-    ]
-
+    return [Coordinate(point=Point(lat=row[lat_col], lon=row[lon_col]),
+                       altitude=row[alt_col])
+            for row in df.iter_rows(named=True)]
+    
 def update_dataset(df: pl.DataFrame, updated_coords: List[Coordinate], 
-                   lat_col: str, lon_col: str, alt_col: str) -> pl.DataFrame:
+                   lat: str, lon: str, alt: str) -> pl.DataFrame:
     """Updates dataset with new altitude values."""
     new_data = {
-        lat_col: [float(c.point.lat) for c in updated_coords],
-        lon_col: [float(c.point.lon) for c in updated_coords],
-        alt_col: [float(c.altitude) for c in updated_coords],
+        lat: [float(c.point.lat) for c in updated_coords],
+        lon: [float(c.point.lon) for c in updated_coords],
+        alt: [float(c.altitude) for c in updated_coords],
     }
     updated_df = pl.DataFrame(new_data)
-    return df.drop([lat_col, lon_col, alt_col]).hstack(updated_df)
+    return df.drop([lat, lon, alt]).hstack(updated_df)
 
-def load_dataset(dataset_path:str='01_ESM.csv',
-                 has_headers:bool=True,
-                 skip_rows:int=6, columns=ecm_col_indices,
+def load_dataset(dataset_path:str='01_ESM.csv', has_headers:bool=True, 
+                 skip_rows:int=6, columns=ecm_col_indices, 
                  new_colums=ecm_col_names) -> pl.DataFrame:
-    """
-    Quick solution for loading vehicle dataset (for testing initially).
-    """
     dataset_path = '01_ECM.csv'
     df = pl.read_csv(dataset_path, has_header=True, skip_rows=6,
                      columns=ecm_col_indices, new_columns=ecm_col_names)
     df.drop([c for c in df.columns if df[c].null_count() == df.height])
     
-    return df    
+    return df
+
 
 
 if __name__ == '__main__':
     df = load_dataset()
     print(df)
     print(df.columns)
-    
     # df.select(pl.col('struct_col').struct.field(''))
     
     # dataset_path = '01_ECM.csv'

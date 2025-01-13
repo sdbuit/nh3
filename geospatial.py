@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import List, Union
 from tqdm.contrib.concurrent import thread_map, process_map
 import numpy as np
-# import polars as pl
+import polars as pl
 
 
 logging.basicConfig(level=logging.INFO, 
@@ -26,8 +26,9 @@ class Coordinate:
     altitude: np.float32
 
 
-def load_json_dem(json_path: str) -> list[Coordinate]:
-    """Loads dataset taken from DEM (digital elevation model) database"""
+def load_geo_elev_model(json_path: str) -> list[Coordinate]:
+    """Loads dataset taken from DEM (digital elevation model) database."""
+    ft_to_m=pl.Float32(0.3048)  # Scaler for converting foot to meters.
     with open(json_path, 'r') as f:
         data = json.load(f)
     elevation_profile = []
@@ -38,10 +39,31 @@ def load_json_dem(json_path: str) -> list[Coordinate]:
                     lat=np.float32(item['lat']),
                     lon=np.float32(item['lon'])
                 ),
-                altitude=np.float32(item['elev'])
+                altitude=np.float32(item['elev']*ft_to_m)
             )
         )
     return elevation_profile
+
+def load_geo_elev_model_v2(json_path: str) -> List[Coordinate]:
+    """Loads JSON data using polars and returns List[Coordinate]."""
+    # ft_to_m = np.float32(0.3048)
+    ft_to_m=0.3048
+    schema={'lat': pl.Float32,'lon': pl.Float32,'elev': pl.Float32}
+    df=pl.read_json(json_path, schema=schema)
+    df=df.with_columns(pl.col('elev').fill_null(0.0))
+    coord_list = []
+    for row in df.to_dicts():
+        coord_list.append(
+            Coordinate(
+                point=Point(
+                    lat=row['lat'],
+                    lon=row['lon']
+                ),
+                altitude=row["elev"]*ft_to_m
+            )
+        )
+
+    return coord_list
 
 
 class DistanceCalculator(ABC):
@@ -130,12 +152,17 @@ class CoordinateMapper:
         """
         points = [v.point for v in vehicle_data]
         if use_process_map:
-            logging.info("Using process_map for mapping...")
-            closest_coords = process_map(self.find_closest_point, points, chunksize=100)
+            logging.info('Using process_map for mapping...')
+                                        # Vehicle Point(lat,lon), altitude)
+            closest_coords = process_map(self.find_closest_point, points,
+                                         chunksize=100)
         else:
-            logging.info("Using thread_map for mapping...")
-            closest_coords = thread_map(self.find_closest_point, points, chunksize=100)
-
+            logging.info('Using thread_map for mapping...')
+            closest_coords = thread_map(self.find_closest_point, points,
+                                        chunksize=100)
+        
+        logging.info(f'Total missing closest points: {sum(1 for coord in closest_coords if coord is None)}')
+        
         return [coord.altitude if coord else np.nan for coord in closest_coords]
     
 
