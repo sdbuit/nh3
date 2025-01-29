@@ -2,9 +2,7 @@
 
 # **nh3**
 
-nh3 is a lightweight framework for characterizing ammonia (NH3) emissions under real-time driving conditions.
-
-The repo contains code used from present time of the project with additional features and performance improvements.
+nh3 is a lightweight framework for characterizing ammonia emissions under real-time driving conditions. The repo contains additional code features and performance improvements from previous implementations during this project.
 
 <br>
 <h4>
