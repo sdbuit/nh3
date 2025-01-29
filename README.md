@@ -4,6 +4,9 @@
 
 nh3 is a lightweight framework for characterizing ammonia (NH3) emissions under real-time driving conditions.
 
+The repo contains code used from present time of the project with additional features and performance improvements.
+
+<br>
 <h4>
   <a href="https://github.com/sdbuit/nh3/blob/origin/docs/vehicle-dynamics.md" rel="./docs/">Vehicle Dynamics</a>
   <span> · </span>
@@ -13,22 +16,17 @@ nh3 is a lightweight framework for characterizing ammonia (NH3) emissions under 
   <span> · </span>
   <a href="https://github.com/sdbuit/nh3/blob/origin/docs/">Equipment</a>
 </h4>
-
-Samuel Buit
-
 </div>
 
 ## Overview
 
-This research project, sponsored by the Utah Division of Air Quality (UDAQ), involved collaboration between Utah State University (USU) and Weber State University (WSU) to measure and analyze ammonia (NH3) emissions from diesel and gasoline vehicles under conditions specific to Utah. 
-
-The study aimed to clarify ammonia (NH3) emissions and their impact on particulate matter formation in northern Utah. By conducting laboratory and on-road tests, it aimed to characterize these emissions and guide better air quality strategies for the state.
+Sponsored by the Utah Division of Air Quality (UDAQ), involved collaboration between Utah State University (USU) and Weber State University (WSU) to measure and analyze ammonia (NH3) emissions from diesel and gasoline vehicles.
 
 ### Objectives
 
 * Model of Utah's diesel and gasoline passenger vehicle categories. A test fleet of gasoline and diesel vehicles representative of northern Utah's population.
 
-* Develop NH3 calibration procedure; for verification, validation, and evaluating **[Picarro G2103](./docs/datasheet/Picarro_G2103_Analyzer_Datasheet_200806.pdf)** cavity ring-down spectrometer (CRDS).
+* Develop NH3 calibration procedure **[Picarro G2103](/docs/datasheet/Picarro_G2103_Analyzer_Datasheet_200806.pdf)** cavity ring-down spectrometer (CRDS).
 
 * Off-road laboratory (dynamometer) measurements of diesel and gasoline vehicle NH3 emissions.
 
@@ -36,8 +34,4 @@ The study aimed to clarify ammonia (NH3) emissions and their impact on particula
 
 ## References
 
-[1] M. Abualqumboz. "On-road Tailpipe Characterization of Exhaust Ammonia    Emissions from in-use Light-duty Gasoline motor Vehicles." *Pollution Research*. https://doi.org/10.1016/j.apr.2022.101449. 1 Aug Accessed 1 Aug. 2022.
-
-<!-- https://deq.utah.gov/air-quality/ammonia-emission-assessment-from-diesel-and-gasoline-engines-under-utah-specific-conditions -->
-
-<!-- https://www.sciencedirect.com/science/article/pii/S1309104222001337#sec6 -->
+For more details see [references/README.md](/docs/references/README.md/#references)
