@@ -1,52 +1,61 @@
 import os
 import sys
 import math
+import re
 import polars as pl
 
-from dataset import DatasetLoader, vehicle_geodetic_to_coord, update_dataset, fix_duplicate_columns
+from dataset import (DatasetLoader, vehicle_geodetic_to_coord, update_dataset, 
+                    fix_duplicate_columns)
 import geospatial as geo
 
-def process_nox_nh3_columns(df: pl.DataFrame, shift_count: int = 5) -> pl.DataFrame:
-    # Rename the first occurrence to 'nox_cant' and the second to 'nox_2'.
-    cols = df.columns
-    if cols.count('NOX(ppm)') >= 2:
+
+def process_nox_cols(df: pl.DataFrame, shift_count: int = 5) -> pl.DataFrame:
+    nox_count = df.columns.count('NOX(ppm)')    
+    if nox_count >= 2:
         new_cols = []
         count = 0
-        for col in cols:
+        for col in df.columns:
             if col == 'NOX(ppm)':
                 count += 1
-                if count == 1:
-                    new_cols.append('nox_cant')
-                elif count == 2:
-                    new_cols.append('nox_2')
-                else:
-                    new_cols.append(col)
+                new_cols.append(f'nox_node_{count:02d}')
             else:
                 new_cols.append(col)
         df.columns = new_cols
-
-    rename_map = {}
-    if 'nox_cant' in df.columns and 'nox_2' in df.columns:
-        rename_map = {'nox_cant': 'NOX_NODE10', 'nox_2': 'NOX_NODE12'}
-    if rename_map:
-        df = df.rename(rename_map)
-    if 'NOX_NODE10' not in df.columns or 'NOX_NODE12' not in df.columns:
+    elif nox_count == 1:
+        new_cols = []
+        for col in df.columns:
+            if col == 'NOX(ppm)':
+                new_cols.append('nox_node_01')
+            else:
+                new_cols.append(col)
+        df.columns = new_cols
+        print("[Warning] Only one 'NOX(ppm)' column found. 'nox_node_02' is missing; 'nox_ppm' column will be set to null.")
+    else:
+        print("[Warning] No 'NOX(ppm)' column found in the DataFrame.")
         return df
-    df = df.with_columns([
-        pl.col('NOX_NODE10').shift(shift_count).alias('NOX_NODE10_shifted')
-    ])
-    df = df.with_columns([
-        (pl.col('NOX_NODE12') - pl.col('NOX_NODE10_shifted'))
-            .clip_min(0.0)
-            .alias('nox_ppm')
-    ])
+
     def calibrate_nh3(x: float) -> float:
         if x is None or math.isnan(x):
             return None
         return 1.0553 * x + 0.3223
-    df = df.with_columns([
-        pl.col('NOX_NODE10_shifted').apply(calibrate_nh3).alias('nh3_ppm')
-    ])
+
+    df = df.with_columns([pl.col('nox_node_01')
+                          .shift(shift_count)
+                          .alias('nox_node_01_shifted')])
+    if 'nox_node_02' in df.columns:
+        diff_expr = pl.col('nox_node_02') - pl.col('nox_node_01_shifted')
+        df = df.with_columns([
+            pl.when(diff_expr < 0)
+              .then(0.0)
+              .otherwise(diff_expr)
+              .alias('nox_ppm')
+        ])
+    else:
+        df = df.with_columns([pl.lit(None).alias('nox_ppm')])
+    df = df.with_columns([pl.col('nox_node_01_shifted')
+                          .map(calibrate_nh3)
+                          .alias('nh3_ppm')])
+
     return df
 
 def process_for_vsp(df: pl.DataFrame) -> pl.DataFrame:
@@ -65,33 +74,29 @@ def process_for_vsp(df: pl.DataFrame) -> pl.DataFrame:
     return df
 
 def run_altitude_mapping(vehicle_df: pl.DataFrame, lat_col: str, lon_col: str,
-                           alt_col: str, geo_elev_model_path: str, use_process_map: bool,
-                           output_path: str) -> pl.DataFrame:
+                         alt_col: str, geo_elev_model_path: str, use_process_map: bool,
+                         output_path: str) -> pl.DataFrame:
     required = {lat_col, lon_col, alt_col}
     missing = required - set(vehicle_df.columns)
     if missing:
-        print(f'[Warning] Missing required columns for altitude mapping: {missing}')
-        print('Skipping altitude mapping for this dataset.')
+        print(f'[Warning] Missing coordinates for altitude mapping: {missing}')
         return vehicle_df
     geo_elev_model_coord = geo.load_geo_elev_model_v2(geo_elev_model_path)
     coords = vehicle_geodetic_to_coord(vehicle_df)
-    mapper = geo.CoordinateMapper(
-        altitude_data=geo_elev_model_coord,
-        distance_calculator=geo.HaversineDistance(),
-        use_kdtree=True
-    )
+    mapper = geo.CoordinateMapper(altitude_data=geo_elev_model_coord,
+                                  distance_calculator=geo.HaversineDistance(), use_kdtree=True)
     mapped_elevs = mapper.map_elevations_v2(coords, use_process_map=use_process_map)
+    if len(mapped_elevs) > 1 and abs(mapped_elevs[0] - mapped_elevs[1]) > 10:
+        mapped_elevs[0] = mapped_elevs[1]    
     updated_coords = geo.merge_altitudes(coords, mapped_elevs)
-    updated_vehicle_df = update_dataset(vehicle_df, updated_coords, lat_col, lon_col, alt_col)
+    updated_vehicle_df = update_dataset(vehicle_df, updated_coords, 
+                                        lat_col, lon_col, alt_col)
     updated_vehicle_df = updated_vehicle_df.fill_nan(None)
-    updated_vehicle_df.write_csv(output_path, null_value='')
+    # updated_vehicle_df.write_csv(output_path, null_value='')
+
     return updated_vehicle_df
 
 def process_for_grade(df: pl.DataFrame) -> pl.DataFrame:
-    """
-    Compute the grade (%) between successive trackpoints.
-    Grade = (vertical difference / horizontal distance) * 100.
-    """
     df = df.with_columns([
         pl.col('lat_deg').shift(1).alias('prev_lat'),
         pl.col('lon_deg').shift(1).alias('prev_lon'),
@@ -111,15 +116,38 @@ def process_for_grade(df: pl.DataFrame) -> pl.DataFrame:
     distances = [compute_distance(row) for row in temp_df.to_dicts()]
     df = df.with_columns(pl.Series('dist_m', distances))
     df = df.with_columns([
-        ((pl.col('alt_m') - pl.col('prev_alt')) / pl.col('dist_m') * 100).alias('grade_pct')
-    ])
+        ((pl.col('alt_m') - pl.col('prev_alt')) / pl.col('dist_m') * 100).alias('grade_pct')])
     df = df.drop(['prev_lat', 'prev_lon', 'prev_alt', 'dist_m'])
+    return df
+
+def correct_headers(df: pl.DataFrame) -> pl.DataFrame:
+    orig_cols = df.columns
+    new_names = []
+    keep_cols = []
+    seen = set()
+    for col in orig_cols:
+        new_name = col
+        if re.match(r'^_duplicated_\d+$', col):
+            continue
+        elif re.match(r'^NOX\(ppm\)_duplicated_\d+$', col):
+            new_name = 'nox_node_02'
+        elif col == 'O2R(%)_duplicated_0':
+            new_name = 'o2r'
+        elif col in {'0Ch Engine RPM(rpm)', '0Fh Intake air temperature(∞C)'}:
+            new_name = 'nox_node_02'
+        if new_name in seen:
+            continue
+        seen.add(new_name)
+        keep_cols.append(col)
+        new_names.append(new_name)
+    df = df.select(keep_cols)
+    df.columns = new_names
     return df
 
 def main():
     base_path = './data/vehicle_v2'
     geo_elev_model_path = './data/geo/drive_cycle_route.json'
-    output_folder = 'test_process_data'
+    output_folder = './data/test_process_output'
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
     loader = DatasetLoader(base_path=base_path)
@@ -137,7 +165,7 @@ def main():
             print(f'Processing ECM file: {meta.get("file")}')
             if 'speed_mph' in df.columns:
                 df = df.with_columns((pl.col('speed_mph') * 0.44704).alias('gps_speed_m_s'))
-            df = process_nox_nh3_columns(df, shift_count=5)
+            df = process_nox_cols(df, shift_count=5)
             if {'lat_deg', 'lon_deg', 'alt_m'}.issubset(set(df.columns)):
                 out_path_alt = os.path.join(output_folder, f'mapped_{year}_{make}_{model}_ECM_{file_index}.csv')
                 df = run_altitude_mapping(
@@ -154,9 +182,11 @@ def main():
                 print(f'[Warning] Missing geodetic columns in {meta.get("file")}; skipping altitude mapping and grade.')
             df = process_for_vsp(df)
             df = fix_duplicate_columns(df)
+            df = correct_headers(df)
             final_path = os.path.join(output_folder, f'final_{year}_{make}_{model}_ECM_{file_index}.csv')
             df.write_csv(final_path, null_value='')
             print(f'[{file_index}] Completed pipeline, wrote {final_path}')
+
 
 if __name__ == '__main__':
     main()
