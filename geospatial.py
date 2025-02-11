@@ -1,156 +1,97 @@
-import logging
 import math
 import json
+import logging
+from functools import partial
+from typing import List, Optional
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from typing import List
-from tqdm.contrib.concurrent import thread_map, process_map
+from tqdm.contrib.concurrent import process_map, thread_map
+
 import numpy as np
 import polars as pl
 from scipy.spatial import cKDTree
-from functools import partial
-from tqdm.contrib.concurrent import thread_map
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-
-@dataclass
-class Point:
-    lat: np.float32
-    lon: np.float32
-    deg: bool = True
+import dataset as ds
+from config import config, Point, Coordinate
 
 
-@dataclass
-class Coordinate:
-    point: Point
-    altitude: np.float32
+class GeoProcessingError(Exception):
+    """Base exception for geospatial processing errors"""
+
+class DataValidationError(GeoProcessingError):
+    """TODO"""
 
 
 class DistanceCalculator(ABC):
     @abstractmethod
     def calculate(self, p1: Point, p2: Point) -> np.float32:
-        pass
+        """Computes distance between two points"""
 
 
 class HaversineDistance(DistanceCalculator):
-    def __init__(self, radius: np.float32 = 6367.0):
+    def __init__(self, radius: float = config.EARTH_RADIUS):
         self.radius = radius
 
-    def point_radian(self, point: Point) -> Point:
-        if point.deg:
-            return Point(
-                lat=np.radians(point.lat),
-                lon=np.radians(point.lon),
-                deg=False,
-            )
-
-        return point
+    def _to_radians(self, point: Point) -> Point:
+        return Point(
+            lat=np.radians(point.lat),
+            lon=np.radians(point.lon),
+            deg=False
+        ) if point.deg else point
 
     def calculate(self, p1: Point, p2: Point) -> np.float32:
-        p1 = self.point_radian(p1)
-        p2 = self.point_radian(p2)
-        dlat = p2.lat - p1.lat
-        dlon = p2.lon - p1.lon
-        a = math.sin(dlat / 2) ** 2 + math.cos(p1.lat) * math.cos(p2.lat) * math.sin(dlon / 2) ** 2
-        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-
-        return np.float32(self.radius * c)
-
-
-class Euclidean(DistanceCalculator):
-    def calculate(self, p1: Point, p2: Point) -> np.float32:
-        return np.sqrt((p2.lat - p1.lat) ** 2 + (p2.lon - p1.lon) ** 2)
-
-
-def _find_closest_point(altitude_data: List[Coordinate],
-                        distance_calculator: DistanceCalculator,
-                        kdtree, target: Point) -> Coordinate:
-    if kdtree is not None:
-        dist, idx = kdtree.query([float(target.lat), float(target.lon)])
-        return altitude_data[idx]
-    else:
-        closest_coord = None
-        min_d = np.float32(np.inf)
-        for coord in altitude_data:
-            d = distance_calculator.calculate(target, coord.point)
-            if d < min_d:
-                min_d = d
-                closest_coord = coord
-
-        return closest_coord
+        p1_rad = self._to_radians(p1)
+        p2_rad = self._to_radians(p2)
+        dlat = p2_rad.lat - p1_rad.lat
+        dlon = p2_rad.lon - p1_rad.lon
+        a = math.sin(dlat/2)**2 + math.cos(p1_rad.lat) * math.cos(p2_rad.lat) * math.sin(dlon/2)**2
+        return np.float32(self.radius * 2 * math.atan2(math.sqrt(a), math.sqrt(1-a)))
 
 
 class CoordinateMapper:
-    def __init__(self, altitude_data: List[Coordinate],
-                 distance_calculator: DistanceCalculator,
-                 use_kdtree: bool = False):
+    def __init__(self, altitude_data: List[Coordinate], 
+                 distance_calculator: DistanceCalculator, 
+                 use_kdtree: bool = config.KD_TREE_ENABLED):
         self.altitude_data = altitude_data
         self.distance_calculator = distance_calculator
-        self.use_kdtree = use_kdtree
-        if use_kdtree:
-            arr = [[float(coord.point.lat), float(coord.point.lon)] for coord in altitude_data]
-            arr = np.array(arr, dtype=np.float64)
-            self._kdtree = cKDTree(arr)
-        else:
-            self._kdtree = None
+        self.kdtree = self._build_kdtree() if use_kdtree else None
 
-    def find_closest_point(self, target: Point) -> Coordinate:
-        if self._kdtree is not None:
-            dist, idx = self._kdtree.query([float(target.lat), float(target.lon)])
+    def _build_kdtree(self) -> cKDTree:
+        try:
+            points = np.array([[c.point.lat, c.point.lon] for c in self.altitude_data], dtype=np.float64)
+            
+            return cKDTree(points)
+        
+        except Exception as e:
+            raise GeoProcessingError('KDTree initialization failed') from e
+
+    def find_closest(self, target: Point) -> Optional[Coordinate]:
+        if self.kdtree:
+            _, idx = self.kdtree.query([target.lat, target.lon])
+            
             return self.altitude_data[idx]
-        else:
-            closest_coord = None
-            min_d = np.float32(np.inf)
-            for coord in self.altitude_data:
-                d = self.distance_calculator.calculate(target, coord.point)
-                if d < min_d:
-                    min_d = d
-                    closest_coord = coord
+        
+        closest = min(
+            self.altitude_data,
+            key=lambda c: self.distance_calculator.calculate(target, c.point),
+            default=None
+        )
+        
+        return closest
+    
+    def map_elevations(self, targets: List[Coordinate], 
+                       use_process_map: bool = True) -> List[np.float32]:
+        mapper = partial(self._single_point_mapper, self.find_closest)
+        executor = process_map if use_process_map else thread_map
+        results = executor(mapper, [t.point for t in targets], chunksize=50)
+        
+        return [r.altitude if r else np.nan for r in results]
 
-            return closest_coord
-
-    def map_elevations(self, vehicle_data: List[Coordinate]) -> List[np.float32]:
-        mapped = []
-        for vcoord in vehicle_data:
-            c = self.find_closest_point(vcoord.point)
-            mapped.append(c.altitude if c else np.nan)
-        return mapped
-
-    def map_elevations_v2(self, vehicle_data: List[Coordinate], use_process_map=False) -> List[np.float32]:
-        log_msg = 'Using process_map for altitude mapping...' if use_process_map else 'Using thread_map for altitude mapping...'
-        logging.info(log_msg)
-        points = [v.point for v in vehicle_data]
-        if use_process_map:
-            func = partial(_find_closest_point, self.altitude_data, self.distance_calculator, self._kdtree)
-            closest_coords = process_map(func, points, chunksize=50)
-        else:
-            closest_coords = thread_map(self.find_closest_point, points, chunksize=50)
-        missing = sum(1 for c in closest_coords if c is None)
-        logging.info(f'Total missing coords: {missing}')
-        return [c.altitude if c else np.nan for c in closest_coords]
+    @staticmethod
+    def _single_point_mapper(func, point: Point) -> Optional[Coordinate]:
+        return func(point)
 
 
 def load_geo_elev_model(json_path: str) -> List[Coordinate]:
-    ft_to_m = 0.3048
-    with open(json_path, 'r') as f:
-        data = json.load(f)
-    profile = []
-    for item in data:
-        profile.append(
-            Coordinate(
-                point=Point(
-                    lat=np.float32(item['lat']),
-                    lon=np.float32(item['lon']),
-                ),
-                altitude=np.float32(item['elev'] * ft_to_m),
-            )
-        )
-
-    return profile
-
-
-def load_geo_elev_model_v2(json_path: str) -> List[Coordinate]:
     ft_to_m = 0.3048
     schema = {'lat': pl.Float32, 'lon': pl.Float32, 'elev': pl.Float32}
     df = pl.read_json(json_path, schema=schema)
@@ -166,10 +107,11 @@ def load_geo_elev_model_v2(json_path: str) -> List[Coordinate]:
                 altitude=row['elev'] * ft_to_m,
             )
         )
-    
+
     return coords
 
-def merge_altitudes(original_coords: List[Coordinate], altitudes: List[np.float32]) -> List[Coordinate]:
+def merge_altitudes(original_coords: List[Coordinate], 
+                    altitudes: List[np.float32]) -> List[Coordinate]:
     updated = []
     for old_coord, new_alt in zip(original_coords, altitudes):
         updated.append(
@@ -184,53 +126,11 @@ def merge_altitudes(original_coords: List[Coordinate], altitudes: List[np.float3
 
     return updated
 
-
-def update_vehicle_data_with_elevation(vehicle_data: List[Coordinate],
-                                       mapped_elevations: List[np.float32]) -> List[Coordinate]:
-    if len(vehicle_data) != len(mapped_elevations):
-        logging.error('Mismatch in lengths.')
-        # raise ValueError('Mismatch in lengths')
-    out = []
-    for c, alt in zip(vehicle_data, mapped_elevations):
-        out.append(Coordinate(
-            point=c.point,
-            altitude=alt,
-        ))
-
-    return out
-
-
-def filter_trackpoints(lat: list[float], lon: list[float], alt: list[float],
-                       time_s: list[float], speed_m_s: list[float], dist_thresh: float = 5.0,
-                       elev_thresh: float = 0.0):
-    if not (len(lat) == len(lon) == len(alt) == len(time_s) == len(speed_m_s)):
-        raise ValueError('Mismatched lengths.')
-    f_lat = [lat[0]]
-    f_lon = [lon[0]]
-    f_alt = [alt[0]]
-    f_time = [time_s[0]]
-    f_speed = [speed_m_s[0]]
-    hav = HaversineDistance(radius=6371000.0)
-    for i in range(1, len(lat)):
-        dist_m = hav.calculate(
-            Point(lat=np.float32(f_lat[-1]), lon=np.float32(f_lon[-1])),
-            Point(lat=np.float32(lat[i]), lon=np.float32(lon[i]))
-        )
-        d_alt = abs(alt[i] - f_alt[-1])
-        if dist_m < dist_thresh and d_alt < elev_thresh:
-            continue
-        f_lat.append(lat[i])
-        f_lon.append(lon[i])
-        f_alt.append(alt[i])
-        f_time.append(time_s[i])
-        f_speed.append(speed_m_s[i])
-
-    return f_lat, f_lon, f_alt, f_time, f_speed
-
-
-def calculate_elevation_gain_pipeline(df: pl.DataFrame, window_size=50, threshold=1.0) -> float:
+def calculate_elevation_gain_pipeline(df: pl.DataFrame, window_size=50,  
+        threshold=config.ELEVATION_MISSING_THRESHOLD) -> float:
     if 'alt_m' not in df.columns:
         return 0.0
+
     df_smoothed = df.with_columns(pl.col('alt_m').rolling_mean(window_size).alias('alt_m_smooth'))
     alt_list = df_smoothed['alt_m_smooth'].to_list()
     total_gain = 0.0
@@ -241,7 +141,86 @@ def calculate_elevation_gain_pipeline(df: pl.DataFrame, window_size=50, threshol
 
     return total_gain
 
+def vehicle_geodetic_to_coord(df: pl.DataFrame) -> List[Coordinate]:
+    coords = []
+    for row in df.iter_rows(named=True):
+        try:
+            lat = float(row['lat_deg'])
+            lon = float(row['lon_deg'])
+            alt = float(row['alt_m']) if row.get('alt_m') is not None else 0.0
+            coords.append(Coordinate(point=Point(lat=lat, lon=lon), altitude=alt))
+        except Exception:
+            continue
+
+    return coords
+
+def run_altitude_mapping(vehicle_df: pl.DataFrame, lat_col: str, lon_col: str,
+                         alt_col: str, geo_elev_model_path: str, use_process_map: bool,
+                         output_path: str) -> pl.DataFrame:
+    required = {lat_col, lon_col, alt_col}
+    missing = required - set(vehicle_df.columns)
+    if missing:
+        print(f'[Warning] Missing coordinates for altitude mapping: {missing}')
+
+        return vehicle_df
+
+    geo_elev_model_coord = load_geo_elev_model(geo_elev_model_path)
+
+    coords = vehicle_geodetic_to_coord(vehicle_df)
+    
+    mapper = CoordinateMapper(altitude_data=geo_elev_model_coord,
+                              distance_calculator=HaversineDistance(),
+                              use_kdtree=True)
+    
+    mapped_elevs = mapper.map_elevations(coords, use_process_map=use_process_map)
+    
+    if len(mapped_elevs) > 1 and abs(mapped_elevs[0] - mapped_elevs[1]) > 10:
+        mapped_elevs[0] = mapped_elevs[1]
+          
+    updated_coords = merge_altitudes(coords, mapped_elevs)
+    
+    updated_vehicle_df = ds.update_dataset(vehicle_df, updated_coords, alt_col)
+    
+    return updated_vehicle_df.fill_nan(None)
+
+def process_for_grade(df: pl.DataFrame) -> pl.DataFrame:
+    required_cols = {'lat_deg', 'lon_deg', 'alt_m'}
+    if not required_cols.issubset(df.columns):
+        raise DataValidationError(f'Missing required columns: {required_cols - set(df.columns)}')
+
+    df = df.with_columns([
+        pl.col('lat_deg').shift(1).alias('_prev_lat'),
+        pl.col('lon_deg').shift(1).alias('_prev_lon'),
+        pl.col('alt_m').shift(1).alias('_prev_alt'),
+    ])
+
+    hav = HaversineDistance(radius=config.EARTH_RADIUS)
+    
+    df = df.with_columns(
+        pl.struct(['_prev_lat', '_prev_lon', 'lat_deg', 'lon_deg'])
+        .map_elements(
+            lambda x: hav.calculate(
+                Point(lat=x['_prev_lat'], lon=x['_prev_lon']),
+                Point(lat=x['lat_deg'], lon=x['lon_deg'])
+            ) if (x['_prev_lat'] is not None and x['_prev_lon'] is not None) else None,
+            return_dtype=pl.Float64
+        )
+        .alias('_dist_m')
+    )
+
+    df = df.with_columns([
+        ((pl.col('alt_m') - pl.col('_prev_alt')) / 
+         pl.col('_dist_m').replace(0, None) * 100
+        ).alias('grade_pct')
+    ]).drop(['_prev_lat', '_prev_lon', '_prev_alt', '_dist_m'])
+    
+    return df.with_columns([
+        pl.when(pl.col('grade_pct').abs() > 100)
+          .then(None)
+          .otherwise(pl.col('grade_pct'))
+          .alias('grade_pct')
+    ]).drop_nulls(subset=['grade_pct'])
+
 
 if __name__ == '__main__':
     base_path = './data/vehicle_v2'
-    loader = None
