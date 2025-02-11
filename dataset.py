@@ -1,95 +1,82 @@
 import os
-import polars as pl
+import re
+import math
+import logging
 from typing import Tuple, Dict, List, Optional
+
+import polars as pl
 from tqdm.contrib.concurrent import thread_map
-from geospatial import Coordinate, Point
 
-COLUMN_ALIASES = {
-    'timestamp_raw': ['Date & Time'],
-    'elapse_hms': ['Elapse Time (hh:mm:ss)'],
-    'elapse_sec': ['Elapse Time (sec)'],
+from config import config, Coordinate
 
-    'tc1_degC': ['tc1_degC', 'TC1(degC)'],
-    'tc2_degC': ['tc2_degC', 'TC2(degC)'],
-    'tc3_degC': ['tc3_degC', 'TC3(degC)'],
-    'tc4_degC': ['tc4_degC', 'TC4(degC)'],
-
-    # CANopen/ECM fields for 0x10
-    'canopen_state_0x10': ['CANopenState_0x10()'],
-    'canopen_error_code_0x10': ['CANopen_Error_Code_0x10()'],
-    'canopen_error_reg_0x10': ['CANopen_Error_Reg_0x10()'],
-    'ecm_errcode1_0x10': ['ECM_ErrCode1_0x10()'],
-    'ecm_auxiliary_0x10': ['ECM_Auxiliary_0x10()'],
-    'ecm_errcode2_0x10': ['ECM_ErrCode2_0x10()'],
-
-    # CANopen/ECM fields for 0x11
-    'canopen_state_0x11': ['CANopenState_0x11()'],
-    'canopen_error_code_0x11': ['CANopen_Error_Code_0x11()'],
-    'canopen_error_reg_0x11': ['CANopen_Error_Reg_0x11()'],
-    'ecm_errcode1_0x11': ['ECM_ErrCode1_0x11()'],
-    'ecm_auxiliary_0x11': ['ECM_Auxiliary_0x11()'],
-    'ecm_errcode2_0x11': ['ECM_ErrCode2_0x11()'],
-
-    # CANopen/ECM fields for 0x12
-    'canopen_state_0x12': ['CANopenState_0x12()'],
-    'canopen_error_code_0x12': ['CANopen_Error_Code_0x12()'],
-    'canopen_error_reg_0x12': ['CANopen_Error_Reg_0x12()'],
-    'ecm_errcode1_0x12': ['ECM_ErrCode1_0x12()'],
-    'ecm_auxiliary_0x12': ['ECM_Auxiliary_0x12()'],
-    'ecm_errcode2_0x12': ['ECM_ErrCode2_0x12()'],
-   
-    # CANopen/ECM fields for 0x15
-    'canopen_state_0x15': ['CANopenState_0x15()'],
-    'canopen_error_code_0x15': ['CANopen_Error_Code_0x15()'],
-    'canopen_error_reg_0x15': ['CANopen_Error_Reg_0x15()'],
-    'ecm_errcode1_0x15': ['ECM_ErrCode1_0x15()'],
-    'ecm_auxiliary_0x15': ['ECM_Auxiliary_0x15()'],
-    'ecm_errcode2_0x15': ['ECM_ErrCode2_0x15()'],   
-    'nox_node_01': ['NOX(ppm)'],
-    'lam': ['lam', 'LAM()'],
-    'o2r': ['o2r', 'O2R(%)'],
-    'AFR': ['AFR()'],
-    'rpvs_ohms': ['rpvs_ohms', 'RPVS(ohms)'],
-    'pkpa_kpa': ['PKPA(kPa)'],
-    'nh3_ppm': ['NH3(ppm)'],
-    'mode_hex': ['mode_hex', 'MODE(hex)'],
-    'vh_volt': ['vh_volt', 'VH(V)'],
-    'speed_kmh': ['Speed(kmh)', 'Speed_kmh(km/h)'],
-    'speed_mph': ['Speed(mph)', 'Speed_mph(mph)'],
-    'course_deg': ['Course(degrees)', 'Course(deg)'],
-    'lat_deg': ['Latitude(degrees)', 'Latitude(deg)'],
-    'lon_deg': ['Longitude(degrees)', 'Longitude(deg)'],
-    'alt_m': ['Altitude_m(m)', 'Altitude(m)'],
-    'alt_ft': ['alt_ft', 'Altitude_ft(ft)'],
-    'sat_type': ['SatType()'],
-    'sat_count': ['SatCount()'],
-    
-    'obd_rpm': ['rpm_00', 'RPM_$00(rpm)', '0Ch Engine RPM(rpm)', '0Ch Engine RPM(rpm)'],
-    'obd_vss_kmh_0': ['vss_00', 'VSS_$00(km/h)'],
-    'obd_vss_kmh_1': ['VSS_$01(km/h)'],
-    'obd_engine_load_pct': ['load_pct_00', 'LOAD_PCT_$00(%)', '04h Calculated engine load(%)'],
-    'obd_o2s12': ['O2S12_$00(V)'],
-    'obd_sup': ['OBDSUP_$00()'],
-    'obd_mil_dist': ['mil_dist_00'],
-    'obd_mil_dist_km': ['21h Distance traveled with MIL on(km)', 'MIL_DIST_$00(km)'],
-    'obd_rpm': ['RPM_$01(rpm)'],
-    'obd_clt_dist_km': ['CLR_DIST_$00(km)'],
-    'obd_cat_temp': ['CATEMP11_$00(âˆžC)', 'CATEMP11_$00(Â°C)', 'CATEMP11_$00(∞C)'],
-    'obd_cat_temp_bank_1': ['3Ch Catalyst Temperature: Bank 1'],
-    'obd_o2_sensor_bank2': ['13h O2 sensors present (in 2 banks)()'],
-    'obd_O2_S12_v': ['O2S12_$00(V)'],
-    'obd_maf_gs': ['MAF_$00(g/s)'],
-    'obd_mil_dist_km': ['MIL_DIST_$00(km)', '21h Distance traveled with MIL on(km)'],
-    'obd_iat': ['IAT_$00(âˆžC)'],
-    'obd_cat_rdy': ['CAT_RDY_$00()'],
-    'obd_speed_kmh': ['0Dh Vehicle speed(km/h)'],
-    'obd_intake_air_temp': ['0Fh Intake air temperature(âˆžC)']
-}
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 SCHEMA_OVERRIDE = {}
 
+
+class DatasetLoader:
+    def __init__(self, base_path: str):
+        self.base_path = base_path
+    
+    def load_all(self) -> List[Tuple[pl.DataFrame, Dict]]:
+        return load_all_datasets(self.base_path)
+    
+    def load_all_datasets_parallel(self) -> List[Tuple[pl.DataFrame, Dict]]:
+        return load_all_datasets(self.base_path)
+
+
+def update_dataset(vehicle_df: pl.DataFrame, updated_coords: List[Coordinate],
+        alt_col: str) -> pl.DataFrame:
+    altitudes = [coord.altitude for coord in updated_coords]
+    
+    return vehicle_df.with_columns([pl.Series(name=alt_col, values=altitudes)])
+
+
+def process_nox_cols(df: pl.DataFrame, shift_count: int = 1) -> pl.DataFrame:
+    """
+    Process NOx data columns:  
+        - Assumes apply_aliases() applied to the header col names.
+        - Applies hard-coded NH3 calibration to new alias nh3_ppm.    
+    
+    TODO:
+        - Check Calibration data
+    """
+    if 'nox_node_01' in df.columns and 'nox_node_02' in df.columns:
+        df = df.with_columns([
+            pl.col('nox_node_01').shift(shift_count).alias('nox_node_01_shifted')
+        ])
+        diff_expr = pl.col('nox_node_02') - pl.col('nox_node_01_shifted')
+        df = df.with_columns([
+            pl.when(diff_expr < 0)
+              .then(0.0)
+              .otherwise(diff_expr)
+              .alias('nox_ppm')
+        ])
+        
+        def calibrate_nh3(x: float) -> float:
+            if x is None or math.isnan(x):
+                return None
+            return 1.0553 * x + 0.3223
+        
+        df = df.with_columns([
+            pl.col('nox_node_01_shifted')
+              .map(calibrate_nh3)
+              .alias('nh3_ppm')
+        ])
+        logger.info('nox_node_01 and nox_node_02')
+    
+    elif 'nox_node_01' in df.columns:
+        logger.warning('Only one NOX column found. nox_node_02 is missing; setting nox_ppm to null.')
+        df = df.with_columns([pl.lit(None).alias('nox_ppm')])
+    
+    else:
+        logger.warning('No NOX column found (expected nox_node_01).')
+    
+    return df
+
 def detect_header_row(file_path: str, max_skip: int = 100) -> Optional[int]:
-    recognized_aliases = {alias.lower().strip() for aliases in COLUMN_ALIASES.values() for alias in aliases}
+    recognized_aliases = {alias.lower().strip() for aliases in config.COLUMN_ALIASES.values() for alias in aliases}
     candidate = None
     for skip in range(max_skip + 1):
         try:
@@ -115,7 +102,7 @@ def apply_aliases(df: pl.DataFrame) -> pl.DataFrame:
     for col in df.columns:
         normalized = col.lower().strip()
         renamed = None
-        for canonical, aliases in COLUMN_ALIASES.items():
+        for canonical, aliases in config.COLUMN_ALIASES.items():
             for alias in aliases:
                 if normalized == alias.lower().strip():
                     renamed = canonical
@@ -127,29 +114,38 @@ def apply_aliases(df: pl.DataFrame) -> pl.DataFrame:
     
     return df
 
-def fix_duplicate_columns(df: pl.DataFrame) -> pl.DataFrame:
-    seen = {}
-    new_cols = []
-    cols_to_select = []
-    for i, col in enumerate(df.columns):
-        count = seen.get(col, 0)
-        if count:
-            if df[col].drop_nulls().height == 0:
-                seen[col] += 1
-                continue
-            else:
-                new_name = f'{col}_{count}'
-                new_cols.append(new_name)
-                cols_to_select.append((i, col))
-                seen[col] += 1
+def normalize_headers(df: pl.DataFrame) -> pl.DataFrame:
+    """
+    Returns pl.DataFrame assuming apply_alias fn performed on arg pl.DataFrame.
+    The alias (col names) in the header are normalized
+        - '_duplicated_<#>' is removed
+        - NOX(ppm) and O2R(%) data (or col aliases) are renamed.
+            e.g. nox_node_1, nox_node_2, etc.
+        - Other duplicate columns are suffixed with a counter
+            e.g. col, col_2, ...
+    """
+    raw_cols = df.columns
+    cleaned_cols = [re.sub(r'_duplicated_\d+', '', col).strip() for col in raw_cols]
+    special_bases = {'NOX(ppm)': 'nox_node', 'nox(ppm)': 'nox_node',
+                     'nox_node': 'nox_node', 'o2r(%)': 'o2r', 'o2r': 'o2r',}
+    special_counts = {base: 0 for base in special_bases.values()}
+    generic_counts = {}
+    normalized = []
+    for col in cleaned_cols:
+        lower_col = col.lower()
+        special_key = None
+        for key in special_bases:
+            if lower_col == key or lower_col.startswith(special_bases[key]):
+                special_key = special_bases[key]
+                break
+        if special_key:
+            special_counts[special_key] += 1
+            new_name = f'{special_key}_{special_counts[special_key]}'
         else:
-            seen[col] = 0
-            new_cols.append(col)
-            cols_to_select.append((i, col))
-    cols_to_select.sort(key=lambda x: x[0])
-    selected_col_names = [col for i, col in cols_to_select]
-    df = df.select(selected_col_names)
-    df.columns = new_cols
+            generic_counts[col] = generic_counts.get(col, 0) + 1
+            new_name = col if generic_counts[col] == 1 else f'{col}_{generic_counts[col]}'
+        normalized.append(new_name)
+    df.columns = normalized
     
     return df
 
@@ -160,18 +156,12 @@ def load_dataset(dataset_path: str) -> Tuple[pl.DataFrame, Dict]:
         print(f'[Warning] Using the first row as header for {dataset_path}')
         header_row = 0
     try:
-        df = pl.read_csv(
-            dataset_path,
-            has_header=True,
-            skip_rows=header_row,
-            dtypes=SCHEMA_OVERRIDE,
-            infer_schema_length=10000,
-            ignore_errors=True,
-            quote_char="'",
-            null_values=['', 'NULL']
-        )
+        df = pl.read_csv(dataset_path, has_header=True, skip_rows=header_row,
+            dtypes=SCHEMA_OVERRIDE, infer_schema_length=10000, 
+            ignore_errors=True, quote_char="'", null_values=['', 'NULL'])
         df = apply_aliases(df)
-        df = fix_duplicate_columns(df)
+        # df = fix_duplicate_columns(df)
+        df = normalize_headers(df) 
         parts = os.path.normpath(dataset_path).split(os.sep)
         try:
             idx = parts.index('vehicle_v2')
@@ -192,7 +182,9 @@ def load_dataset(dataset_path: str) -> Tuple[pl.DataFrame, Dict]:
             'model': model,
             'dataset_type': dataset_type
         }
+        
         return df, meta
+    
     except Exception as e:
         print(f'[Error] Failed to read {dataset_path}: {e}')
         
@@ -205,32 +197,8 @@ def load_all_datasets(base_path: str) -> List[Tuple[pl.DataFrame, Dict]]:
         for file in files if file.endswith('.csv')
     ]
     
-    return thread_map(load_dataset, dataset_paths, chunksize=5)
+    return thread_map(load_dataset, dataset_paths, chunksize=1)
 
-class DatasetLoader:
-    def __init__(self, base_path: str):
-        self.base_path = base_path
-    def load_all(self) -> List[Tuple[pl.DataFrame, Dict]]:
-        return load_all_datasets(self.base_path)
-    def load_all_datasets_parallel(self) -> List[Tuple[pl.DataFrame, Dict]]:
-        return load_all_datasets(self.base_path)
-
-def vehicle_geodetic_to_coord(df: pl.DataFrame) -> List[Coordinate]:
-    coords = []
-    for row in df.iter_rows(named=True):
-        try:
-            lat = float(row['lat_deg'])
-            lon = float(row['lon_deg'])
-            alt = float(row['alt_m']) if row.get('alt_m') is not None else 0.0
-            coords.append(Coordinate(point=Point(lat=lat, lon=lon), altitude=alt))
-        except Exception:
-            continue
-    return coords
-
-def update_dataset(vehicle_df: pl.DataFrame, updated_coords: List[Coordinate],
-                   lat_col: str, lon_col: str, alt_col: str) -> pl.DataFrame:
-    altitudes = [coord.altitude for coord in updated_coords]
-    return vehicle_df.with_columns([pl.Series(name=alt_col, values=altitudes)])
 
 if __name__ == '__main__':
     base_path = './data/vehicle_v2'
@@ -238,4 +206,4 @@ if __name__ == '__main__':
     datasets = loader.load_all()
     for df, meta in datasets:
         if not df.is_empty():
-            print(f'Loaded {meta.get("file")} with {df.shape[0]} rows and {df.shape[1]} columns.')
+            print(f'Loaded {meta.get('file')} with {df.shape[0]} rows and {df.shape[1]} columns.')
