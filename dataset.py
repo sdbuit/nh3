@@ -1,3 +1,4 @@
+# dataset.py
 import os
 import re
 import math
@@ -9,10 +10,7 @@ from tqdm.contrib.concurrent import thread_map
 
 from config import config, Coordinate
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-
-SCHEMA_OVERRIDE = {}
 
 
 class DatasetLoader:
@@ -25,7 +23,6 @@ class DatasetLoader:
     def load_all_datasets_parallel(self) -> List[Tuple[pl.DataFrame, Dict]]:
         return load_all_datasets(self.base_path)
 
-
 def update_dataset(vehicle_df: pl.DataFrame, updated_coords: List[Coordinate],
         alt_col: str) -> pl.DataFrame:
     altitudes = [coord.altitude for coord in updated_coords]
@@ -33,14 +30,29 @@ def update_dataset(vehicle_df: pl.DataFrame, updated_coords: List[Coordinate],
     return vehicle_df.with_columns([pl.Series(name=alt_col, values=altitudes)])
 
 
+# TODO FIX CATEMP11_$00(∞C),CATEMP21_$00(∞C)
+#   - 2016\Chevrolet\Colorado\03_ECM.csv: column with name 'obd_cat_temp' has 
+#     more than one occurrence.
+
+# TODO vehicle_v2\2019\Toyota\Tacoma\03_ECM.csv
+#   - column with name 'obd_cat_temp' has more than one occurrence
+
 def process_nox_cols(df: pl.DataFrame, shift_count: int = 1) -> pl.DataFrame:
     """
     Process NOx data columns:  
         - Assumes apply_aliases() applied to the header col names.
         - Applies hard-coded NH3 calibration to new alias nh3_ppm.    
     
-    TODO:
-        - Check Calibration data
+    TODO CHECK CALIB PROCEDURE
+        - VERIFY calib data
+        - Test Model
+        
+    TODO REFACTOR
+        - Implement function dedicated for duplicate variables.  They are
+          in the the OBD and NOx node sensor data sections.
+        - Thus causing a processing failure on a few datasets.
+        - Calibration procedures should be isolated/separated for better
+          modularity.
     """
     if 'nox_node_01' in df.columns and 'nox_node_02' in df.columns:
         df = df.with_columns([
@@ -111,13 +123,12 @@ def apply_aliases(df: pl.DataFrame) -> pl.DataFrame:
                 break
         new_names.append(renamed if renamed is not None else col)
     df.columns = new_names
-    
     return df
 
 def normalize_headers(df: pl.DataFrame) -> pl.DataFrame:
     """
     Returns pl.DataFrame assuming apply_alias fn performed on arg pl.DataFrame.
-    The alias (col names) in the header are normalized
+    The alias (col names) in the header are normalized:
         - '_duplicated_<#>' is removed
         - NOX(ppm) and O2R(%) data (or col aliases) are renamed.
             e.g. nox_node_1, nox_node_2, etc.
@@ -152,16 +163,19 @@ def normalize_headers(df: pl.DataFrame) -> pl.DataFrame:
 def load_dataset(dataset_path: str) -> Tuple[pl.DataFrame, Dict]:
     filename = os.path.basename(dataset_path)
     header_row = detect_header_row(dataset_path)
+    trial_number = None
+    match = re.match(r'^(\d+)_', filename)
+    if match:
+        trial_number = match.group(1).zfill(2)  # Pad with leading zero 
     if header_row is None:
         print(f'[Warning] Using the first row as header for {dataset_path}')
         header_row = 0
     try:
         df = pl.read_csv(dataset_path, has_header=True, skip_rows=header_row,
-            dtypes=SCHEMA_OVERRIDE, infer_schema_length=10000, 
-            ignore_errors=True, quote_char="'", null_values=['', 'NULL'])
+                         infer_schema_length=10000, ignore_errors=True, 
+                         quote_char="'", null_values=['', 'NULL'])
         df = apply_aliases(df)
-        # df = fix_duplicate_columns(df)
-        df = normalize_headers(df) 
+        df = normalize_headers(df)
         parts = os.path.normpath(dataset_path).split(os.sep)
         try:
             idx = parts.index('vehicle_v2')
@@ -174,36 +188,18 @@ def load_dataset(dataset_path: str) -> Tuple[pl.DataFrame, Dict]:
             dataset_type = 'ECM'
         else:
             dataset_type = 'unknown'
-        meta = {
-            'file': dataset_path,
-            'skip_rows': header_row,
-            'year': year,
-            'make': make,
-            'model': model,
-            'dataset_type': dataset_type
-        }
-        
+        meta = {'file': dataset_path, 'skip_rows': header_row, 'year': year,
+                'make': make, 'model': model, 'dataset_type': dataset_type, 
+                'trial_number': trial_number}  # Add drive cycle trial to meta
         return df, meta
     
     except Exception as e:
         print(f'[Error] Failed to read {dataset_path}: {e}')
-        
         return pl.DataFrame(), {}
 
 def load_all_datasets(base_path: str) -> List[Tuple[pl.DataFrame, Dict]]:
-    dataset_paths = [
-        os.path.join(root, file)
-        for root, _, files in os.walk(base_path)
-        for file in files if file.endswith('.csv')
-    ]
+    dataset_paths = [os.path.join(root, file)
+                     for root, _, files in os.walk(base_path)
+                     for file in files if file.endswith('.csv')]
     
     return thread_map(load_dataset, dataset_paths, chunksize=1)
-
-
-if __name__ == '__main__':
-    base_path = './data/vehicle_v2'
-    loader = DatasetLoader(base_path)
-    datasets = loader.load_all()
-    for df, meta in datasets:
-        if not df.is_empty():
-            print(f'Loaded {meta.get('file')} with {df.shape[0]} rows and {df.shape[1]} columns.')
