@@ -5,40 +5,17 @@
 ![Vehicle Dynamics Free Body Diagram](/docs/references/figures/Vehicle-Dynamics-FBD.PNG)  
 *Figure 1: Vehicle Dynamics Free Body Diagram (extracted from [Vehicle_Specific_Power.pdf](/docs/references/Vehicle_Specific_Power.pdf)).*
 
-<table>
-  <tr>
-    <th><b>Force</b></th>
-    <th><b>Formula</b></th>
-    <th><b>Parameters</b></th>
-  </tr>
-  <tr>
-    <td><b>Inertial Force (Acceleration)</b></td>
-    <td>$F_{\text{acc}} = m a$</td>
-    <td>$m$ = vehicle mass (kg)  <br> $a$ = vehicle acceleration (m/s²)</td>
-  </tr>
-  <tr>
-    <td><b>Grade (Hill-Climb) Force</b></td>
-    <td>$F_{\text{grade}} = mg\sin(\theta)$</td>
-    <td>$g$ = gravitational acceleration <br> $\theta$ = road slope angle</td>
-  </tr>
-  <tr>
-    <td><b>Rolling Resistance Force</b></td>
-    <td>$F_{\text{rolling}} = mgC_r$</td>
-    <td>$C_r$ = rolling resistance coefficient</td>
-  </tr>
-  <tr>
-    <td><b>Aerodynamic Drag Force</b></td>
-    <td>$F_{\text{aero}} = \frac{1}{2} \rho_{\text{air}} C_dAv^2$</td>
-    <td>$\rho_{\text{air}}$ = air density $1.207$ kg/m³ at 20°C <br> 
-        $C_d$ = aerodynamic drag coefficient <br> 
-        $A$ = frontal area (m²) <br> 
-        $v$ = vehicle speed (m/s)
-    </td>
-  </tr>
-</table>
+![Vehicle Dynamics Free Body Diagram](/docs/references/figures/Vehicle-Dynamics-FBD.PNG)  
+*Figure 1: Vehicle Dynamics Free Body Diagram (extracted from [Vehicle_Specific_Power.pdf](/docs/references/Vehicle_Specific_Power.pdf)).*
+
+| **Force**                         | **Formula**                                                 | **Parameters**                                                                                                                                                |
+| --------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Inertial Force (Acceleration)** | $F_{\text{acc}} = m a$                                      | $m$ = vehicle mass (kg) <br> $a$ = vehicle acceleration (m/s²)                                                                                                |
+| **Grade (Hill-Climb) Force**      | $F_{\text{grade}} = mg\sin(\theta)$                         | $g$ = gravitational acceleration <br> $\theta$ = road slope angle                                                                                             |
+| **Rolling Resistance Force**      | $F_{\text{rolling}} = mgC_r$                                | $C_r$ = rolling resistance coefficient                                                                                                                        |
+| **Aerodynamic Drag Force**        | $F_{\text{aero}} = \frac{1}{2} \rho_{\text{air}} C_d A v^2$ | $\rho_{\text{air}}$ = air density (1.207 kg/m³ at 20°C) <br> $C_d$ = aerodynamic drag coefficient <br> $A$ = frontal area (m²) <br> $v$ = vehicle speed (m/s) |
 
 </div>
-
 
 **Vehicle Specific Power (VSP)** represents the total power demand **per unit mass** of a vehicle:
 
