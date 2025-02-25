@@ -1,0 +1,15 @@
+.venv
+__pycache__
+.ipynb_checkpoints
+
+.vscode
+.ruff_cache
+
+notebooks/*
+!notebooks/README.md
+
+docs/*
+!docs/README.md
+
+data/*
+!data/README.md
