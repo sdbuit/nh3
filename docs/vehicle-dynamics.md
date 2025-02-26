@@ -1,12 +1,16 @@
 # Vehicle Specific Power (VSP)
 
+<br>
+
 <div align="center">
 
 ![Vehicle Dynamics Free Body Diagram](/docs/references/figures/Vehicle-Dynamics-FBD.PNG)
 
-*Figure 1: Vehicle Dynamics Free Body Diagram (extracted from [Vehicle_Specific_Power.pdf](/docs/references/Vehicle_Specific_Power.pdf)).*
+*Figure 1: Vehicle Dynamics Free Body Diagram([Vehicle_Specific_Power.pdf](/docs/references/Vehicle_Specific_Power.pdf)).*
 
-| **Force**                         | **Formula**                                                 | **Parameters**                                                                                                                                                |
+<br>
+
+|**Force**                         | **Formula**                                                 | **Parameters**                                                                                                                                                |
 | --------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Inertial Force (Acceleration)** | $F_{\text{acc}} = m a$                                      | $m$ = vehicle mass (kg) <br> $a$ = vehicle acceleration (m/s²)                                                                                                |
 | **Grade (Hill-Climb) Force**      | $F_{\text{grade}} = mg\sin(\theta)$                         | $g$ = gravitational acceleration <br> $\theta$ = road slope angle                                                                                             |
@@ -15,13 +19,15 @@
 
 </div>
 
+---
+
 **Vehicle Specific Power (VSP)** represents the total power demand **per unit mass** of a vehicle:
 
 $$\text{VSP} = \frac{\frac{d}{dt}\Bigl(E_{\mathrm{kinetic}} + E_{\mathrm{potential}}\Bigr) + F_{\mathrm{rolling}} v + F_{\mathrm{aero}} v}{m}$$
 
 $$ \Rightarrow \text{VSP} \approx v(1 + \epsilon) \cdot a + g \cdot \frac{\text{grade}}{100} + gC_r + \frac{1}{m} \cdot \frac{\rho_{\text{air}}}{2} A C_d v^3$$
 
-where:
+**where:**
 - $\upsilon$ = vehicle speed (m/s),
 - $E_{\mathrm{kinetic}} = \frac{1}{2} m v^2$,
 - $E_{\mathrm{potential}} = mgh$,
