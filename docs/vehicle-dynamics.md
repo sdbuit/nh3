@@ -2,10 +2,8 @@
 
 <div align="center">
 
-![Vehicle Dynamics Free Body Diagram](/docs/references/figures/Vehicle-Dynamics-FBD.PNG)  
-*Figure 1: Vehicle Dynamics Free Body Diagram (extracted from [Vehicle_Specific_Power.pdf](/docs/references/Vehicle_Specific_Power.pdf)).*
+![Vehicle Dynamics Free Body Diagram](/docs/references/figures/Vehicle-Dynamics-FBD.PNG)
 
-![Vehicle Dynamics Free Body Diagram](/docs/references/figures/Vehicle-Dynamics-FBD.PNG)  
 *Figure 1: Vehicle Dynamics Free Body Diagram (extracted from [Vehicle_Specific_Power.pdf](/docs/references/Vehicle_Specific_Power.pdf)).*
 
 | **Force**                         | **Formula**                                                 | **Parameters**                                                                                                                                                |
