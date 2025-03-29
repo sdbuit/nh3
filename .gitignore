@@ -13,3 +13,8 @@ docs/*
 
 data/*
 !data/README.md
+
+nh3/v1/
+eg-nh3
+
+.gitignore
