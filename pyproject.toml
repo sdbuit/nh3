@@ -1,14 +1,32 @@
+[build-system]
+requires = ["scikit-build-core[pyproject]", "numpy"]
+build-backend = "scikit_build_core.build"
+
 [project]
 name = "nh3"
 version = "0.1.0"
-description = 'nh3 is a lightweight framework for characterizing ammonia (NH3) emissions under real-time driving conditions.'
+description = "TODO"
 readme = "README.md"
-requires-python = '>=3.13'
+requires-python = ">=3.12"
 dependencies = [
-    "jupyterlab>=4.3.4",
-    "matplotlib>=3.10.0",
-    "numpy>=2.2.1",
-    "polars>=1.18.0",
-    "scipy>=1.15.1",
-    "tqdm>=4.67.1",
+    "numpy",
+    "polars",
+    "matplotlib",
+    "scipy",
+    "numba",
+    "scikit-learn",
+    "loguru"
 ]
+
+[tool.scikit-build]
+wheel.packages = ["nh3"]
+sdist.include = [
+    "nh3/extensions/cpp/",
+    "extern/pybind11/"
+]
+
+[tool.scikit-build.cmake]
+verbose = true
+
+[tool.scikit-build.ninja]
+minimum-version = "1.10"
