@@ -5,6 +5,7 @@
 nh3 is a lightweight framework for characterizing ammonia emissions under real-time driving conditions. The repo contains additional code features and performance improvements from previous implementations during this project.
 
 <br>
+
 <h4>
   <a href="https://github.com/sdbuit/nh3/blob/origin/docs/vehicle-dynamics.md" rel="./docs/">Vehicle Dynamics</a>
   <span> · </span>
@@ -15,6 +16,25 @@ nh3 is a lightweight framework for characterizing ammonia emissions under real-t
   <a href="https://github.com/sdbuit/nh3/blob/origin/docs/">Equipment</a>
 </h4>
 </div>
+
+<!-- <p align="center">
+  <img src="docs/images/2015_Toyota_Corolla.JPG" alt="Toyota Corolla Test Vehicle" width="600"/> </p> -->
+
+<p align="center">
+  <table style="border-collapse: collapse; border: none; margin: auto;">
+    <tr>
+      <td style="border: none; padding: 5px;" align="center">
+        <img src="docs/images/2015_Toyota_Corolla.JPG" alt="Toyota Corolla Test Vehicle" height="300"/> <br/>
+        <!-- <em>Vehicle used for testing</em> -->
+      </td>
+      <td style="border: none; padding: 5px;" align="center">
+        <img src="docs/images/Data_Collection_POV.JPG" alt="Data Collection Setup" height="300"/> <br/>
+        <!-- <em>Data collection equipment setup</em> -->
+      </td>
+    </tr>
+  </table>
+</p>
+
 
 ## Overview
 
