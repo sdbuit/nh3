@@ -20,7 +20,8 @@ nh3 is a lightweight framework for characterizing ammonia emissions under real-t
 <!-- <p align="center">
   <img src="docs/images/2015_Toyota_Corolla.JPG" alt="Toyota Corolla Test Vehicle" width="600"/> </p> -->
 
-<p align="center">
+<!-- <p align="center"> -->
+<div align="center">
   <table style="border-collapse: collapse; border: none; margin: auto;">
     <tr>
       <td style="border: none; padding: 5px;" align="center">
@@ -33,7 +34,7 @@ nh3 is a lightweight framework for characterizing ammonia emissions under real-t
       </td>
     </tr>
   </table>
-</p>
+</div>
 
 
 ## Overview
