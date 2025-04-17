@@ -8,8 +8,7 @@ from pathlib import Path
 
 import polars as pl
 import numpy as np
-from scipy.spatial import cKDTree
-
+# from scipy.spatial import cKDTree
 
 try:
     from nh3 import config  # Absolute import from 'nh3'
@@ -19,8 +18,9 @@ try:
     EARTH_RADIUS = config.EARTH_RADIUS
 
 except ImportError:
-    logging.warning('Could not import \'config\' from \'nh3\'. Using default values. '
-                    'Ensure script is run from the workspace directory or nh3 package is installed.')
+    logging.warning(
+        'Could not import \'config\' from \'nh3\'. Using default values.'
+    )
     COLUMN_ALIASES: Dict[str, List[str]] = {}
     HEADER_DETECTION_KEYWORDS: List[str] = ['Time', 'Speed', 'Lat', 'Lon']
     DRIVE_CYCLE_ROUTE_PATH: str = 'data/geo/drive_cycle_route.json'
@@ -99,6 +99,34 @@ def _calculate_haversine_vectorized(
 
     distance = EARTH_RADIUS * c
     return distance
+
+def preprocess_data(df: pl.DataFrame, config) -> Tuple[pl.DataFrame, np.ndarray, dict]:
+    """
+    Preprocess raw telemetry data, adding derived columns like grade.
+    Now requires altitude data or compiled extension support for elevation mapping.
+    """
+    # ... (data cleaning steps) ...
+
+    # Ensure required columns for grade calculation are present
+    if 'Latitude' in df.columns and 'Longitude' in df.columns:
+        if 'Altitude' not in df.columns:
+            # No Python fallback for elevation mapping: altitude is required
+            raise RuntimeError(
+                "Altitude data is missing. Automatic elevation mapping is no longer supported; "
+                "please provide altitude values in the input data."
+            )
+        # Compute grade using the compiled extension
+        lat = df['Latitude'].to_numpy(np.float64)
+        lon = df['Longitude'].to_numpy(np.float64)
+        alt = df['Altitude'].to_numpy(np.float64)
+        grades = nh3.extensions.fast_grade_calculation(lat, lon, alt)
+        df = df.with_columns(pl.Series(name='grade', values=grades))
+    else:
+        # If no GPS data, we cannot compute grade
+        logging.warning("Latitude/Longitude columns not found; grade calculation skipped.")
+
+    # ... (any additional preprocessing) ...
+    return df, df['grade'].to_numpy(np.float64) if 'grade' in df.columns else np.array([]), metadata
 
 def _calculate_grade_vectorized(delta_alt: pl.Expr, distance: pl.Expr) -> pl.Expr:
     """Calculates grade percentage using vectorized Polars expressions."""

@@ -17,4 +17,9 @@ data/*
 nh3/v1/
 eg-nh3
 
-.gitignore
+dev-notes.md
+
+reports
+
+TODO.md
+test_processed_output

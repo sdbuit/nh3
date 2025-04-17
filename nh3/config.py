@@ -2,32 +2,31 @@ import os
 from pathlib import Path
 from typing import Dict, Set, List
 
-# Core Path Definitions
+
 CONFIG_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = CONFIG_DIR.parent
 DATA_DIR = PROJECT_ROOT / 'data'
 OUTPUT_DIR = PROJECT_ROOT / 'test_processed_output'
 GEO_DATA_DIR = PROJECT_ROOT / 'data' / 'geo'
 EXTENSION_DIR = CONFIG_DIR / 'extensions'
-
-# File Paths
 DRIVE_CYCLE_ROUTE_PATH = GEO_DATA_DIR / 'drive_cycle_route.json'
 
-# Constants
-EARTH_RADIUS = 6371000 # meters
+REPORTS_DIR = PROJECT_ROOT / 'reports'
+PLOTS_DIR = REPORTS_DIR / 'plots'
 
-# Header Alias Configuration
 COLUMN_ALIASES: Dict[str, List[str]] = {
-    # --- Time ---
+    # Time
     'time_s': ['Elapse Time (sec)'],
     'timestamp_raw': ['Date & Time'],
     'elapse_hms': ['Elapse Time (hh:mm:ss)'],
-    # --- Thermocouples ---
+
+    # Thermocouples
     'tc1_degC': ['tc1_degC', 'TC1(degC)'],
     'tc2_degC': ['tc2_degC', 'TC2(degC)'],
     'tc3_degC': ['tc3_degC', 'TC3(degC)'],
     'tc4_degC': ['tc4_degC', 'TC4(degC)'],
-    # --- CANopen/ECM Status ---
+
+    # CANopen/ECM Status
     'canopen_state_0x10': ['CANopenState_0x10()'],
     'canopen_error_code_0x10': ['CANopen_Error_Code_0x10()'],
     'canopen_error_reg_0x10': ['CANopen_Error_Reg_0x10()'],
@@ -52,7 +51,8 @@ COLUMN_ALIASES: Dict[str, List[str]] = {
     'ecm_errcode1_0x15': ['ECM_ErrCode1_0x15()'],
     'ecm_auxiliary_0x15': ['ECM_Auxiliary_0x15()'],
     'ecm_errcode2_0x15': ['ECM_ErrCode2_0x15()'],
-    # --- Emissions/Engine Parameters ---
+
+    # Emissions/Engine Parameters
     'nox_ppm': ['NOX(ppm)'],
     'lambda': ['lam', 'LAM()'],
     'o2r_pct': ['O2R(%)'],
@@ -62,7 +62,8 @@ COLUMN_ALIASES: Dict[str, List[str]] = {
     'nh3_ppm': ['NH3(ppm)'],
     'mode_hex': ['mode_hex', 'MODE(hex)'],
     'vh_volt': ['vh_volt', 'VH(V)'],
-    # --- GPS/Vehicle ---
+
+    # GPS and Vehicle OBD Patameters
     'speed_kmh': ['Speed(kmh)', 'Speed_kmh(km/h)', '0Dh Vehicle speed(km/h)', 'vss_00', 'VSS_$00(km/h)', 'VSS_$01(km/h)'],
     'speed_mph': ['Speed(mph)', 'Speed_mph(mph)'],
     'course_deg': ['Course(degrees)', 'Course(deg)'],
@@ -72,7 +73,7 @@ COLUMN_ALIASES: Dict[str, List[str]] = {
     'altitude_ft': ['alt_ft', 'Altitude_ft(ft)'],
     'sat_type': ['SatType()'],
     'sat_count': ['SatCount()'],
-    # --- OBD Parameters ---
+
     'engine_rpm': ['0Ch Engine RPM(rpm)', 'rpm_00', 'RPM_$00(rpm)', 'RPM_$01(rpm)', 'EngRPM'],
     'engine_load_pct': ['load_pct_00', 'LOAD_PCT_$00(%)', '04h Calculated engine load(%)'],
     'o2s12_v': ['O2S12_$00(V)'],
@@ -91,7 +92,17 @@ HEADER_DETECTION_KEYWORDS: List[str] = [
     'Time', 'Speed', 'Lat', 'Lon', 'Alt', 'RPM', 'Date', 'Course', 'Sat'
 ]
 
-# Required columns needed *after* preprocessing and aliasing for validation
+EARTH_RADIUS = 6371000 # meters
+DEFAULT_VEHICLE_PARAMS: Dict[str, float] = {
+    'vehicle_mass_kg': 1900.0,          # Kilograms (kg) - Adjust for typical vehicle in your fleet
+    'rolling_resistance_coeff': 0.013,  # Unitless (Crr) - Typical range 0.01 to 0.015
+    'drag_coeff': 0.35,                 # Unitless (Cd) - Typical range 0.25 to 0.4+
+    'frontal_area_m2': 2.5,             # Square meters (m^2) - Estimate based on vehicle type
+    'drivetrain_efficiency': 0.92,      # Unitless (eta) - Efficiency from engine to wheels
+    'air_density_kg_m3': 1.225          # Kilograms per cubic meter (kg/m^3) - Standard sea level
+}
+
+# TODO Required columns needed after preprocessing and aliasing for validation
 REQUIRED_COLUMNS_POST_PROCESSING: Set[str] = {
     'time_s',
     'speed_mph',
@@ -102,10 +113,25 @@ REQUIRED_COLUMNS_POST_PROCESSING: Set[str] = {
     # TODO add 'engine_rpm', 'vsp', ...
 }
 
+REQUIRED_COLUMNS_POST_PROCESSING: Set[str] = {
+    'time_s',
+    'speed_mph', # Or speed_kmh
+    'latitude',
+    'longitude',
+    'altitude_m_mapped',
+    'grade_percent',
+    'vsp_kw_tonne'
+}
+
 # Multiprocessing Configuration
-CPU_COUNT = os.cpu_count()
+CPU_COUNT = os.cpu_count() // 2
 MAX_WORKERS = max(1, CPU_COUNT - 1) if CPU_COUNT else 1 # Leave a core free
 
+MAX_WORKERS = max(1, CPU_COUNT - 1) if CPU_COUNT else 1 # Leave a core free
+
+if 'grade_percent' not in REQUIRED_COLUMNS_POST_PROCESSING:
+     # Note: Modifying a set requires adding, not appending
+     REQUIRED_COLUMNS_POST_PROCESSING.add('grade_percent')
 
 if __name__ == '__main__':
     print(f'Project Root: {PROJECT_ROOT}')

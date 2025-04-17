@@ -1,32 +1,15 @@
 [build-system]
-requires = ["scikit-build-core[pyproject]", "numpy"]
+requires = ["scikit-build-core[pyproject]", "pybind11"]
 build-backend = "scikit_build_core.build"
 
 [project]
 name = "nh3"
-version = "0.1.0"
-description = "TODO"
+version = "0.5.0"
+description = "High-performance NH3 emissions analysis toolkit"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = [
-    "numpy",
-    "polars",
-    "matplotlib",
-    "scipy",
-    "numba",
-    "scikit-learn",
-    "loguru"
-]
+dependencies = ["numpy", "polars"]
 
 [tool.scikit-build]
 wheel.packages = ["nh3"]
-sdist.include = [
-    "nh3/extensions/cpp/",
-    "extern/pybind11/"
-]
-
-[tool.scikit-build.cmake]
-verbose = true
-
-[tool.scikit-build.ninja]
-minimum-version = "1.10"
+cmake.version = "3.27"
