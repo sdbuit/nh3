@@ -1,10 +1,4 @@
-"""
-Verifies grade/elevation, and compares VSP among different runs.
-"""
-
 import os
-# from pathlib import Path
-
 import polars as pl
 import matplotlib.pyplot as plt
 
