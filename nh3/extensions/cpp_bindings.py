@@ -1,70 +1,51 @@
-"""
-C++ extension bindings.
-"""
-
-import os
 import numpy as np
+from . import _nh3_cpp
 
-_ext_path = os.path.dirname(os.path.abspath(__file__))
+def fast_grade_calculation(latitudes, longitudes, altitudes,
+                           distance_threshold=10.0, smoothing_window=5):
+    """
+    Fast implementation of grade calculation using the C++ extension.
+    Calculates road grade (%) with smoothing applied.
+    """
+    lat_array = np.asarray(latitudes, dtype=np.float64)
+    lon_array = np.asarray(longitudes, dtype=np.float64)
+    alt_array = np.asarray(altitudes, dtype=np.float64)
+    if lat_array.size == 0:
+        return np.array([], dtype=np.float64)
 
-
-try:
-    from . import _grade_calc_ext
-    def fast_grade_calculation(latitudes, longitudes, altitudes,
-                               distance_threshold=10.0, smoothing_window=5):
-        """
-        Fast implementation of grade calculation using C++ extension.
-
-        altitude: Array of altitude values
-        distance_threshold: Minimum distance (meters) to consider for grade calculation
-        smoothing_window: Window size for smoothing the grade values
-
-        Returns:
-            Array of grade values (in percent)
-        """
-        # Convert inputs to numpy arrays if they aren't already
-        lat_array = np.asarray(latitudes, dtype=np.float64)
-        lon_array = np.asarray(longitudes, dtype=np.float64)
-        alt_array = np.asarray(altitudes, dtype=np.float64)
-
-        # Calculate distances between consecutive points (haversine formula)
-        n = len(lat_array)
-        distances = np.zeros(n)
-        grades = np.zeros(n)
-
-        # Apply smoothing
-        # This would be implemented in C++ for better performance
-
-        return grades
-
-except ImportError:
-    import warnings
-
-    warnings.warn(
-        "C++ extension for fast grade calculation could not be imported. "
-        "Using slower Python implementation instead. "
-        "To build the C++ extension, run: python setup.py build_ext --inplace"
+    grades = _nh3_cpp.calculate_grade(
+        lat_array, lon_array, alt_array,
+        distance_threshold=distance_threshold,
+        smoothing_window=smoothing_window
     )
+    return grades
 
-    # Define a Python implementation as fallback
-    def fast_grade_calculation(
-        latitudes, longitudes, altitudes, distance_threshold=10.0, smoothing_window=5
-    ):
-        """
-        Python implementation of grade calculation (fallback if C++ extension is not available).
+def calculate_vsp_from_data(speeds_kph, timestamps, grades,
+                            vehicle_mass=1500.0,
+                            rolling_resistance_coef=0.0135,
+                            drag_coef=0.369,
+                            frontal_area=2.27,
+                            drivetrain_efficiency=0.92,
+                            air_density=1.207):
+    """
+    Compute VSP (kW/tonne) using the C++ extension.
+    Returns a tuple (vsp_values, accelerations).
+    """
+    speeds_array = np.asarray(speeds_kph, dtype=np.float64) / 3.6
+    time_array = np.asarray(timestamps, dtype=np.float64)
+    grade_array = np.asarray(grades, dtype=np.float64)
+    vsp_vals, accels = _nh3_cpp.calculate_vsp(
+        speeds_array, time_array, grade_array,
+        vehicle_mass, rolling_resistance_coef, drag_coef, frontal_area,
+        drivetrain_efficiency, air_density
+    )
+    return vsp_vals, accels
 
-        Args:
-            latitudes: Array of latitude values
-            longitudes: Array of longitude values
-            altitudes: Array of altitude values
-            distance_threshold: Minimum distance (meters) to consider for grade calculation
-            smoothing_window: Window size for smoothing the grade values
-
-        Returns:
-            Array of grade values (in percent)
-        """
-        from nh3.preprocessing import calculate_grade
-
-        return calculate_grade(
-            latitudes, longitudes, altitudes, distance_threshold, smoothing_window
-        )
+def classify_vsp_modes(vsp_values):
+    """
+    Classify VSP values into mode categories using the C++ extension.
+    Returns an array of mode indices for each VSP value.
+    """
+    vsp_array = np.asarray(vsp_values, dtype=np.float64)
+    modes = _nh3_cpp.classify_vsp_modes(vsp_array)
+    return modes

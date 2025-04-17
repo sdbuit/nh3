@@ -1,10 +1,6 @@
 try:
-    from extensions.cpp_bindings import fast_grade_calculation
+    from .cpp_bindings import fast_grade_calculation, calculate_vsp_from_data, classify_vsp_modes
+except ImportError as e:
+    raise ImportError('Required cpp extension not available.  Build and install the nh3 C++ extension.') from e
 
-    has_cpp_extensions = True
-except ImportError:
-    from nh3.preprocessing import calculate_grade as fast_grade_calculation
-
-    has_cpp_extensions = False
-
-__all__ = ["fast_grade_calculation", "has_cpp_extensions"]
+__all__ = ["fast_grade_calculation", "calculate_vsp_from_data", "classify_vsp_modes"]
