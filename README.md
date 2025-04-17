@@ -17,10 +17,6 @@ nh3 is a lightweight framework for characterizing ammonia emissions under real-t
 </h4>
 </div>
 
-<!-- <p align="center">
-  <img src="docs/images/2015_Toyota_Corolla.JPG" alt="Toyota Corolla Test Vehicle" width="600"/> </p> -->
-
-<!-- <p align="center"> -->
 <div align="center">
   <table style="border-collapse: collapse; border: none; margin: auto;">
     <tr>
@@ -53,4 +49,4 @@ Sponsored by the Utah Division of Air Quality (UDAQ), involved collaboration bet
 
 ## References
 
-For more details see [references/README.md](/docs/references/README.md/#references)
+- [ ] _TODO_
