@@ -17,20 +17,13 @@ nh3 is a lightweight framework for characterizing ammonia emissions under real-t
 </h4>
 </div>
 
-<div align="center">
-  <table style="border-collapse: collapse; border: none; margin: auto;">
-    <tr>
-      <td style="border: none; padding: 5px;" align="center">
-        <img src="docs/images/2015_Toyota_Corolla.JPG" alt="Toyota Corolla Test Vehicle" height="300"/> <br/>
-        <!-- <em>Vehicle used for testing</em> -->
-      </td>
-      <td style="border: none; padding: 5px;" align="center">
-        <img src="docs/images/Data_Collection_POV.JPG" alt="Data Collection Setup" height="300"/> <br/>
-        <!-- <em>Data collection equipment setup</em> -->
-      </td>
-    </tr>
-  </table>
-</div>
+<table>
+  <tr>
+    <td><a href="" title=""><img src="docs/images/2015_Toyota_Corolla.JPG"></a></td>
+    <td><a href="" title=""><img src="docs/images/Exhaust_Instrumentation_Setup.JPG"></a></td>
+    <td><a href="" title=""><img src="docs/images/Data_Collection_POV.JPG"></a></td>
+  </tr>
+</table>
 
 
 ## Overview
@@ -40,11 +33,8 @@ Sponsored by the Utah Division of Air Quality (UDAQ), involved collaboration bet
 ### Objectives
 
 * Model of Utah's diesel and gasoline passenger vehicle categories. A test fleet of gasoline and diesel vehicles representative of northern Utah's population.
-
 * Develop NH3 calibration procedure **[Picarro G2103](/docs/datasheet/Picarro_G2103_Analyzer_Datasheet_200806.pdf)** cavity ring-down spectrometer (CRDS).
-
 * Off-road laboratory (dynamometer) measurements of diesel and gasoline vehicle NH3 emissions.
-
 * Quantifying real driving emissions of NH3 from diesel and gasoline vehicles with respect to power levels (vehicle-specific power).
 
 ## References
